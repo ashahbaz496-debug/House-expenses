@@ -36,15 +36,31 @@
         .delete-btn { background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
         .loading { text-align: center; font-style: italic; color: #777; margin: 15px 0; }
         
-        .action-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .action-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; }
+        .btn-group { display: flex; gap: 10px; }
         .export-btn { background: #27ae60; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .pdf-btn { background: #8e44ad; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .export-btn:hover { background: #219150; }
+        .pdf-btn:hover { background: #71368a; }
+
+        .by-line { text-align: center; margin-top: 20px; font-weight: bold; color: #555; border-top: 1px solid #ddd; padding-top: 15px; }
+
+        /* PRINT / PDF STYLES */
+        @media print {
+            body { background: white; padding: 0; }
+            .container { box-shadow: none; border: none; width: 100%; max-width: 100%; padding: 0; }
+            form, .filter-section, .delete-btn, .action-bar, .loading { display: none !important; }
+            th:last-child, td:last-child { display: none !important; } /* Hide Action/Delete column */
+            .by-line { display: block !important; margin-top: 30px; font-size: 16px; border-top: 2px solid #333; }
+            h1::before { content: "EXPENSES SUMMARY REPORT - "; }
+        }
 
         @media (max-width: 700px) {
             .grid, form, .filter-grid { grid-template-columns: 1fr; }
             form button { grid-column: span 1; }
             .reset-btn { margin-top: 0; }
-            .action-bar { flex-direction: column; gap: 10px; align-items: stretch; }
+            .action-bar { flex-direction: column; align-items: stretch; }
+            .btn-group { flex-direction: column; }
         }
     </style>
 </head>
@@ -123,7 +139,10 @@
 
     <div class="action-bar">
         <h3>📋 Itemized Record List</h3>
-        <button class="export-btn" onclick="exportToCSV()">📥 Export Current View to CSV</button>
+        <div class="btn-group">
+            <button class="pdf-btn" onclick="generatePDF()">📄 Save / Print as PDF</button>
+            <button class="export-btn" onclick="exportToCSV()">📥 Export to CSV</button>
+        </div>
     </div>
 
     <div id="status" class="loading">Loading expenses from Google Sheet...</div>
@@ -135,12 +154,14 @@
                 <th>Category</th>
                 <th>Description</th>
                 <th>Amount</th>
-                <th>Action</th>
+                <th class="action-col">Action</th>
             </tr>
         </thead>
         <tbody id="expenseTableBody">
         </tbody>
     </table>
+
+    <div class="by-line">CREATED BY AHMAD</div>
 </div>
 
 <script>
@@ -170,11 +191,7 @@
 
         filteredExpenses = rawExpenses.filter(item => {
             const itemDate = item.date ? String(item.date).substring(0, 10) : '';
-            
-            // Category check
             const categoryMatch = (category === 'ALL' || item.category === category);
-            
-            // Date check
             const fromMatch = !fromDate || (itemDate >= fromDate);
             const toMatch = !toDate || (itemDate <= toDate);
 
@@ -201,7 +218,6 @@
             const amt = parseFloat(item.amount || 0);
             total += amt;
 
-            // Group totals for summary box
             if (!categoryTotals[item.category]) {
                 categoryTotals[item.category] = 0;
             }
@@ -213,7 +229,7 @@
                 <td>${item.category}</td>
                 <td>${item.description}</td>
                 <td>${amt.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                <td><button class="delete-btn" onclick="deleteExpense(${index})">Delete</button></td>
+                <td class="action-col"><button class="delete-btn" onclick="deleteExpense(${index})">Delete</button></td>
             `;
             tableBody.appendChild(row);
         });
@@ -221,7 +237,6 @@
         document.getElementById('totalSpent').innerText = total.toLocaleString(undefined, {minimumFractionDigits: 2});
         document.getElementById('totalEntries').innerText = filteredExpenses.length;
 
-        // Render Category Summary Breakdown
         const summaryContainer = document.getElementById('categorySummary');
         summaryContainer.innerHTML = '';
         if (Object.keys(categoryTotals).length === 0) {
@@ -305,6 +320,10 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    }
+
+    function generatePDF() {
+        window.print();
     }
 
     loadExpenses();
