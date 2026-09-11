@@ -1,435 +1,854 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home Construction Expense Tracker</title>
-    <!-- jsPDF Libraries for PDF Generation -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-    <style>
-        * { box-sizing: border-box; font-family: Arial, sans-serif; }
-        body { background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #2c3e50; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-        .card { background: #eef2f7; padding: 15px; border-radius: 8px; text-align: center; }
-        .card h3 { margin: 0; color: #555; }
-        .card p { font-size: 24px; font-weight: bold; color: #27ae60; margin: 10px 0 0 0; }
-        
-        form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 25px; background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
-        form input, form select, form button { padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; }
-        .full-width { grid-column: span 2; }
-        form button { background: #2980b9; color: white; border: none; cursor: pointer; font-size: 16px; font-weight: bold; }
-        form button:hover { background: #3498db; }
-        
-        .calc-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; grid-column: span 2; background: #eaeaea; padding: 10px; border-radius: 5px; }
-        .calc-group label { font-size: 12px; font-weight: bold; color: #555; grid-column: span 2; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home Construction Expense Tracker</title>
 
-        .actions-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: #f1f1f1; padding: 10px; border-radius: 5px; flex-wrap: wrap; gap: 10px; }
-        .pdf-group { display: flex; gap: 8px; align-items: center; }
-        .pdf-group select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
-        
-        .btn { border: none; padding: 8px 14px; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; }
-        .export-btn { background: #27ae60; }
-        .export-btn:hover { background: #219150; }
-        .pdf-btn { background: #e67e22; }
-        .pdf-btn:hover { background: #d35400; }
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background: #34495e; color: white; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        .delete-btn { background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
-        .loading { text-align: center; font-style: italic; color: #777; margin: 15px 0; }
+<style>
+  :root{
+    --blueprint:#16324F;
+    --blueprint-deep:#0E2438;
+    --blueprint-line:rgba(255,255,255,0.09);
+    --paper:#F1EDE2;
+    --panel:#FAF8F2;
+    --ink:#1C1E1B;
+    --ink-soft:#565349;
+    --safety:#E8A33D;
+    --safety-deep:#C8862A;
+    --rust:#B5482F;
+    --rust-deep:#93381F;
+    --line:#CFC7AF;
+    --line-strong:#A9A085;
+    --green-ok:#3E6B4F;
+  }
 
-        .by-line { text-align: center; margin-top: 20px; font-weight: bold; color: #555; border-top: 1px solid #ddd; padding-top: 15px; }
-    </style>
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0;
+    padding:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  ::selection{ background:var(--safety); color:var(--blueprint-deep); }
+
+  /* ---------- BLUEPRINT HEADER ---------- */
+  header.plan{
+    position:relative;
+    background:
+      repeating-linear-gradient(0deg, var(--blueprint-line) 0 1px, transparent 1px 24px),
+      repeating-linear-gradient(90deg, var(--blueprint-line) 0 1px, transparent 1px 24px),
+      linear-gradient(160deg, var(--blueprint) 0%, var(--blueprint-deep) 100%);
+    color:#EFE9DA;
+    padding:38px 20px 30px;
+    border-bottom:6px solid var(--safety);
+  }
+
+  .plan-inner{
+    max-width:920px;
+    margin:0 auto;
+  }
+
+  .plan-eyebrow{
+    font-size:12.5px;
+    letter-spacing:0.04em;
+    color:#9FBBD1;
+    margin:0 0 6px;
+  }
+
+  h1.title{
+    margin:0 0 24px;
+    font-size:clamp(26px,4vw,38px);
+    font-weight:800;
+    letter-spacing:-0.01em;
+    text-transform:uppercase;
+    line-height:1.08;
+  }
+
+  .summary-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+  }
+
+  .tick-panel{
+    position:relative;
+    background:rgba(255,255,255,0.05);
+    border:1px solid rgba(255,255,255,0.18);
+    padding:16px 18px;
+  }
+  .tick-panel::before,.tick-panel::after,
+  .tick-panel .tc::before,.tick-panel .tc::after{ content:""; }
+  .tick-panel::before{
+    position:absolute; top:-1px; left:-1px; width:10px; height:10px;
+    border-top:2px solid var(--safety); border-left:2px solid var(--safety);
+  }
+  .tick-panel::after{
+    position:absolute; bottom:-1px; right:-1px; width:10px; height:10px;
+    border-bottom:2px solid var(--safety); border-right:2px solid var(--safety);
+  }
+
+  .tick-label{
+    font-size:11.5px;
+    color:#9FBBD1;
+    margin:0 0 6px;
+  }
+  .tick-value{
+    font-size:clamp(20px,3vw,28px);
+    font-weight:700;
+    margin:0;
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* ---------- BODY ---------- */
+  main{
+    max-width:920px;
+    margin:0 auto;
+    padding:28px 20px 60px;
+  }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    padding:22px;
+    margin-bottom:22px;
+  }
+
+  .panel h2{
+    margin:0 0 18px;
+    font-size:17px;
+    font-weight:700;
+    padding-bottom:12px;
+    border-bottom:1px solid var(--line);
+  }
+
+  .field-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+    margin-bottom:16px;
+  }
+
+  label{
+    display:block;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
+
+  input[type=text], input[type=number], select{
+    width:100%;
+    padding:10px 11px;
+    border:1px solid var(--line-strong);
+    background:#fff;
+    font-size:14.5px;
+    color:var(--ink);
+    font-family:inherit;
+  }
+
+  input[type=text]:focus, input[type=number]:focus, select:focus{
+    outline:2px solid var(--blueprint);
+    outline-offset:1px;
+  }
+
+  #dateInput{
+    font-variant-numeric:tabular-nums;
+    letter-spacing:0.03em;
+  }
+
+  .calc-box{
+    border:1px dashed var(--line-strong);
+    background:#FDFBF6;
+    padding:16px;
+    margin:4px 0 18px;
+  }
+
+  .calc-title{
+    font-size:13px;
+    font-weight:700;
+    color:var(--blueprint);
+    margin:0 0 12px;
+  }
+
+  .calc-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+  }
+
+  .amount-row{
+    margin-bottom:18px;
+  }
+
+  button{
+    font-family:inherit;
+    cursor:pointer;
+  }
+
+  .btn-primary{
+    width:100%;
+    padding:13px;
+    background:var(--safety);
+    border:1px solid var(--safety-deep);
+    color:var(--blueprint-deep);
+    font-size:15px;
+    font-weight:700;
+  }
+  .btn-primary:hover{ background:var(--safety-deep); }
+  .btn-primary:disabled{
+    background:#DCD5C4;
+    border-color:var(--line-strong);
+    color:var(--ink-soft);
+    cursor:not-allowed;
+  }
+
+  .toolbar{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:flex-end;
+    gap:14px;
+  }
+
+  .toolbar .grow{ flex:1 1 220px; }
+
+  .btn-outline{
+    padding:10px 16px;
+    background:#fff;
+    border:1px solid var(--blueprint);
+    color:var(--blueprint);
+    font-size:13.5px;
+    font-weight:700;
+    white-space:nowrap;
+  }
+  .btn-outline:hover{ background:var(--blueprint); color:#fff; }
+
+  .status-line{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin:2px 0 14px;
+    min-height:16px;
+  }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:13.5px;
+  }
+
+  thead th{
+    text-align:left;
+    font-size:11.5px;
+    color:var(--ink-soft);
+    font-weight:700;
+    padding:8px 10px;
+    border-bottom:2px solid var(--blueprint);
+  }
+
+  tbody td{
+    padding:10px;
+    border-bottom:1px solid var(--line);
+    vertical-align:middle;
+  }
+
+  tbody tr:hover{ background:#FDFBF6; }
+
+  td.num, th.num{ text-align:right; font-variant-numeric:tabular-nums; }
+
+  .empty-row td{
+    text-align:center;
+    color:var(--ink-soft);
+    padding:26px 10px;
+  }
+
+  .del-btn{
+    background:none;
+    border:1px solid var(--rust);
+    color:var(--rust);
+    font-size:12px;
+    padding:5px 10px;
+    font-weight:700;
+  }
+  .del-btn:hover{ background:var(--rust); color:#fff; }
+  .del-btn:disabled{ opacity:0.5; cursor:not-allowed; }
+
+  footer{
+    text-align:center;
+    padding:26px 20px 34px;
+    font-size:11.5px;
+    letter-spacing:0.05em;
+    color:var(--ink-soft);
+    border-top:1px solid var(--line);
+  }
+
+  @media (max-width:560px){
+    .field-grid, .calc-grid, .summary-grid{ grid-template-columns:1fr; }
+    .toolbar{ flex-direction:column; align-items:stretch; }
+  }
+</style>
 </head>
 <body>
 
-<div class="container">
-    <h1>🏠 Home Construction Expenses</h1>
-
-    <div class="grid">
-        <div class="card">
-            <h3>Total Spent</h3>
-            <p id="totalSpent">Rs 0.00</p>
-        </div>
-        <div class="card">
-            <h3>Total Entries</h3>
-            <p id="totalEntries" style="color: #2980b9;">0</p>
-        </div>
+<header class="plan">
+  <div class="plan-inner">
+    <p class="plan-eyebrow">Site Ledger — Expense Log</p>
+    <h1 class="title">🏠 Home Construction Expenses</h1>
+    <div class="summary-grid">
+      <div class="tick-panel">
+        <p class="tick-label">Total Spent</p>
+        <p class="tick-value" id="totalSpent">Rs 0.00</p>
+      </div>
+      <div class="tick-panel">
+        <p class="tick-label">Total Entries</p>
+        <p class="tick-value" id="totalEntries">0</p>
+      </div>
     </div>
+  </div>
+</header>
 
-    <!-- ADD EXPENSE FORM -->
+<main>
+
+  <section class="panel">
+    <h2>Add Expense</h2>
     <form id="expenseForm">
-        <input type="text" id="date" placeholder="DD/MM/YYYY" maxlength="10" required onclick="selectDaySegment(this)">
-        
-        <select id="category" class="shortcut-select" onchange="handleCategoryChange(this)" required>
-            <option value="">Select Category</option>
-            <option value="Foundation & Structure">Foundation & Structure</option>
-            <option value="Cement & Bricks">Cement & Bricks</option>
-            <option value="Labor">Labor</option>
-            <option value="Plumbing & Electrical">Plumbing & Electrical</option>
-            <option value="Finishing & Paint">Finishing & Paint</option>
-            <option value="Permits & Legal">Permits & Legal</option>
-            <option value="Other">Other</option>
-            <option value="NEW_CATEGORY">➕ Add Custom Category...</option>
-        </select>
-        
-        <div class="calc-group">
-            <label>📐 Optional Unit/Rate Calculator (Qty × Rate = Total Amount)</label>
-            <input type="number" id="qty" placeholder="Quantity / Pieces (Optional)" step="any" oninput="calculateTotal()">
-            <input type="number" id="rate" placeholder="Rate Per Piece in Rs (Optional)" step="any" oninput="calculateTotal()">
+      <div class="field-grid">
+        <div>
+          <label for="dateInput">Date</label>
+          <input type="text" id="dateInput" maxlength="10" autocomplete="off" inputmode="numeric">
         </div>
+        <div>
+          <label for="categorySelect">Category</label>
+          <select id="categorySelect"></select>
+        </div>
+      </div>
 
-        <input type="number" id="amount" class="full-width" placeholder="Total Amount (Rs)" step="0.01" required>
-        <button type="submit" id="submitBtn" class="full-width">Add Expense</button>
+      <div class="calc-box">
+        <p class="calc-title">📐 Optional Unit/Rate Calculator (Qty × Rate = Total Amount)</p>
+        <div class="calc-grid">
+          <div>
+            <label for="qtyInput">Quantity / Pieces</label>
+            <input type="number" id="qtyInput" min="0" step="any" placeholder="e.g. 500">
+          </div>
+          <div>
+            <label for="rateInput">Rate Per Piece (Rs)</label>
+            <input type="number" id="rateInput" min="0" step="any" placeholder="e.g. 12.50">
+          </div>
+        </div>
+      </div>
+
+      <div class="amount-row">
+        <label for="amountInput">Total Amount (Rs)</label>
+        <input type="number" id="amountInput" min="0" step="any" required>
+      </div>
+
+      <button type="submit" class="btn-primary" id="submitBtn">Add Expense</button>
     </form>
+  </section>
 
-    <!-- EXPORT & PDF TOOLBAR -->
-    <div class="actions-bar">
-        <button class="btn export-btn" onclick="exportToCSV()">📥 Export CSV</button>
-        
-        <div class="pdf-group">
-            <select id="pdfCategoryFilter">
-                <option value="ALL">All Categories</option>
-                <option value="Foundation & Structure">Foundation & Structure</option>
-                <option value="Cement & Bricks">Cement & Bricks</option>
-                <option value="Labor">Labor</option>
-                <option value="Plumbing & Electrical">Plumbing & Electrical</option>
-                <option value="Finishing & Paint">Finishing & Paint</option>
-                <option value="Permits & Legal">Permits & Legal</option>
-                <option value="Other">Other</option>
-            </select>
-            <button class="btn pdf-btn" onclick="generatePDF()">📄 Generate Category PDF</button>
-        </div>
+  <section class="panel">
+    <h2>Export &amp; Reports</h2>
+    <div class="toolbar">
+      <button type="button" class="btn-outline" id="exportCsvBtn">📥 Export CSV</button>
+      <div class="grow">
+        <label for="pdfCategorySelect">Report Category</label>
+        <select id="pdfCategorySelect"></select>
+      </div>
+      <button type="button" class="btn-outline" id="generatePdfBtn">📄 Generate Category PDF</button>
     </div>
+  </section>
 
-    <div id="status" class="loading">Syncing with Google Sheet...</div>
-
+  <section class="panel">
+    <h2>Expense Log</h2>
+    <p class="status-line" id="statusLine">Loading expenses…</p>
     <table>
-        <thead>
-            <tr>
-                <th>Date (DD/MM/YYYY)</th>
-                <th>Category</th>
-                <th>Quantity</th>
-                <th>Rate / Piece (Rs)</th>
-                <th>Total Amount</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody id="expenseTableBody"></tbody>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Category</th>
+          <th class="num">Quantity</th>
+          <th class="num">Rate / Piece (Rs)</th>
+          <th class="num">Total Amount</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="expenseTableBody">
+        <tr class="empty-row"><td colspan="6">Loading…</td></tr>
+      </tbody>
     </table>
+  </section>
 
-    <div class="by-line">CREATED BY AHMAD</div>
-</div>
+</main>
 
+<footer>CREATED BY AHMAD</footer>
+
+<!-- hidden iframe target so form POSTs never reload the page -->
 <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
 <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSytyYT-JH07VEjqw4rlPs5iR6Mf5Aw-OQ1IAGEa45a7FpCRVKVpGt2KERIubJzosl/exec";
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const SCRIPT_URL = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec"; // <-- replace with your Apps Script Web App URL
 
-    let rawExpenses = [];
+const BASE_CATEGORIES = [
+  "Foundation & Structure",
+  "Cement & Bricks",
+  "Labor",
+  "Plumbing & Electrical",
+  "Finishing & Paint",
+  "Permits & Legal",
+  "Other"
+];
 
-    function getTodayDMY() {
-        const today = new Date();
-        const dd = String(today.getDate()).padStart(2, '0');
-        const mm = String(today.getMonth() + 1).padStart(2, '0');
-        const yyyy = today.getFullYear();
-        return `${dd}/${mm}/${yyyy}`;
+let customCategories = [];
+let expenses = []; // cache of loaded rows, each: {date, category, description, amount}
+
+/* ============================================================
+   CATEGORY DROPDOWNS
+   ============================================================ */
+function allCategories(){
+  return [...BASE_CATEGORIES, ...customCategories];
+}
+
+function rebuildCategorySelect(){
+  const sel = document.getElementById("categorySelect");
+  const prevValue = sel.value;
+  sel.innerHTML = "";
+  allCategories().forEach(cat => {
+    const opt = document.createElement("option");
+    opt.value = cat;
+    opt.textContent = cat;
+    sel.appendChild(opt);
+  });
+  const addOpt = document.createElement("option");
+  addOpt.value = "__add_custom__";
+  addOpt.textContent = "➕ Add Custom Category...";
+  sel.appendChild(addOpt);
+
+  if (prevValue && allCategories().includes(prevValue)) sel.value = prevValue;
+}
+
+function rebuildPdfCategorySelect(){
+  const sel = document.getElementById("pdfCategorySelect");
+  const prevValue = sel.value;
+  sel.innerHTML = "";
+  const allOpt = document.createElement("option");
+  allOpt.value = "__all__";
+  allOpt.textContent = "All Categories";
+  sel.appendChild(allOpt);
+  allCategories().forEach(cat => {
+    const opt = document.createElement("option");
+    opt.value = cat;
+    opt.textContent = cat;
+    sel.appendChild(opt);
+  });
+  if (prevValue) sel.value = prevValue;
+}
+
+document.getElementById("categorySelect").addEventListener("change", function(){
+  if (this.value === "__add_custom__"){
+    const custom = prompt("Enter new category name:");
+    if (custom && custom.trim()){
+      const trimmed = custom.trim();
+      if (!allCategories().includes(trimmed)) customCategories.push(trimmed);
+      rebuildCategorySelect();
+      rebuildPdfCategorySelect();
+      this.value = trimmed;
+    } else {
+      rebuildCategorySelect();
     }
+  }
+});
 
-    const dateInput = document.getElementById('date');
-    dateInput.value = getTodayDMY();
+/* ============================================================
+   SEGMENTED DATE INPUT (DD/MM/YYYY)
+   ============================================================ */
+const dateInput = document.getElementById("dateInput");
+let dSeg = "", mSeg = "", ySeg = "";
 
-    function focusDateInput() {
-        dateInput.focus();
-        if (dateInput.value.length === 10) {
-            dateInput.setSelectionRange(0, 2);
-        }
+function todaySegments(){
+  const now = new Date();
+  dSeg = String(now.getDate()).padStart(2, "0");
+  mSeg = String(now.getMonth() + 1).padStart(2, "0");
+  ySeg = String(now.getFullYear());
+}
+
+function renderDate(){
+  dateInput.value = `${dSeg}/${mSeg}/${ySeg}`;
+}
+
+function selectSegment(name){
+  let start, end;
+  if (name === "d"){ start = 0; end = 2; }
+  else if (name === "m"){ start = 3; end = 5; }
+  else { start = 6; end = 10; }
+  dateInput.setSelectionRange(start, end);
+}
+
+function segmentFromCaret(pos){
+  if (pos <= 2) return "d";
+  if (pos <= 5) return "m";
+  return "y";
+}
+
+todaySegments();
+renderDate();
+
+dateInput.addEventListener("focus", () => selectSegment("d"));
+dateInput.addEventListener("click", () => {
+  const seg = segmentFromCaret(dateInput.selectionStart);
+  selectSegment(seg);
+});
+
+let dPos = 0, mPos = 0, yPos = 0;
+let activeSeg = "d";
+
+dateInput.addEventListener("keydown", function(e){
+  if (e.key === "ArrowLeft"){
+    e.preventDefault();
+    activeSeg = activeSeg === "y" ? "m" : "d";
+    dPos = mPos = yPos = 0;
+    selectSegment(activeSeg);
+    return;
+  }
+  if (e.key === "ArrowRight"){
+    e.preventDefault();
+    activeSeg = activeSeg === "d" ? "m" : "y";
+    dPos = mPos = yPos = 0;
+    selectSegment(activeSeg);
+    return;
+  }
+  if (e.key === "Tab") return; // allow normal tabbing
+
+  if (!/^[0-9]$/.test(e.key)){
+    e.preventDefault();
+    return;
+  }
+  e.preventDefault();
+
+  const caretSeg = segmentFromCaret(dateInput.selectionStart);
+  activeSeg = caretSeg;
+
+  if (activeSeg === "d"){
+    dSeg = (dPos === 0) ? (e.key + dSeg[1]) : (dSeg[0] + e.key);
+    dPos++;
+    if (dPos >= 2){
+      dPos = 0;
+      activeSeg = "m";
+      renderDate();
+      selectSegment("m");
+      return;
     }
-
-    function selectDaySegment(inputEl) {
-        if (inputEl.value.length === 10) {
-            inputEl.setSelectionRange(0, 2);
-        }
+  } else if (activeSeg === "m"){
+    mSeg = (mPos === 0) ? (e.key + mSeg[1]) : (mSeg[0] + e.key);
+    mPos++;
+    if (mPos >= 2){
+      mPos = 0;
+      activeSeg = "y";
+      renderDate();
+      selectSegment("y");
+      return;
     }
+  } else {
+    ySeg = (ySeg + e.key).slice(-4);
+    if (ySeg.length < 4) ySeg = ySeg.padStart(ySeg.length, "0");
+    yPos++;
+    if (yPos >= 4){ yPos = 0; }
+  }
+  renderDate();
+  selectSegment(activeSeg);
+});
 
-    function setupDateAutoFormat(inputId) {
-        const el = document.getElementById(inputId);
-        el.addEventListener('keydown', function(e) {
-            if (e.key === '/' || e.key === 'ArrowRight') {
-                const cursorPos = el.selectionStart;
-                if (cursorPos <= 2) {
-                    e.preventDefault();
-                    el.setSelectionRange(3, 5);
-                } else if (cursorPos <= 5) {
-                    e.preventDefault();
-                    el.setSelectionRange(6, 10);
-                }
-            }
-        });
-    }
+/* ============================================================
+   CALCULATOR: Qty x Rate -> Amount
+   ============================================================ */
+const qtyInput = document.getElementById("qtyInput");
+const rateInput = document.getElementById("rateInput");
+const amountInput = document.getElementById("amountInput");
 
-    setupDateAutoFormat('date');
+function recalcAmount(){
+  const qty = parseFloat(qtyInput.value);
+  const rate = parseFloat(rateInput.value);
+  if (!isNaN(qty) && !isNaN(rate)){
+    amountInput.value = (qty * rate).toFixed(2);
+  }
+}
+qtyInput.addEventListener("input", recalcAmount);
+qtyInput.addEventListener("keyup", recalcAmount);
+rateInput.addEventListener("input", recalcAmount);
+rateInput.addEventListener("keyup", recalcAmount);
 
-    function formatDateDMY(rawDateStr) {
-        if (!rawDateStr) return '';
-        const cleanStr = String(rawDateStr).substring(0, 10);
-        if (cleanStr.includes('-')) {
-            const parts = cleanStr.split('-');
-            if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-        }
-        return cleanStr;
-    }
+/* ============================================================
+   LOAD EXPENSES (JSONP)
+   ============================================================ */
+function loadExpenses(){
+  const statusLine = document.getElementById("statusLine");
+  statusLine.textContent = "Loading expenses…";
 
-    function parseDetails(description) {
-        if (!description) return { qty: '-', rate: '-' };
-        const match = description.match(/([\d\.]+)\s*pcs\s*@\s*Rs\s*([\d\.]+)\/pc/i);
-        if (match) {
-            return { qty: match[1], rate: match[2] };
-        }
-        return { qty: '-', rate: '-' };
-    }
+  const callbackName = "handleData";
+  const script = document.createElement("script");
+  const cacheBuster = new Date().getTime();
+  script.src = `${SCRIPT_URL}?callback=${callbackName}&_=${cacheBuster}`;
+  script.onerror = function(){
+    statusLine.textContent = "⚠ Could not reach the sheet. Check SCRIPT_URL and try again.";
+  };
+  document.body.appendChild(script);
+  script.remove();
+}
 
-    function calculateTotal() {
-        const qty = parseFloat(document.getElementById('qty').value) || 0;
-        const rate = parseFloat(document.getElementById('rate').value) || 0;
-        if (qty > 0 && rate > 0) {
-            document.getElementById('amount').value = (qty * rate).toFixed(2);
-        }
-    }
+function handleData(data){
+  expenses = Array.isArray(data) ? data : [];
 
-    function handleCategoryChange(selectObj) {
-        if (selectObj.value === "NEW_CATEGORY") {
-            const customCat = prompt("Enter new category name:");
-            if (customCat && customCat.trim() !== "") {
-                const newName = customCat.trim();
-                
-                const opt = document.createElement("option");
-                opt.value = newName;
-                opt.text = newName;
-                opt.selected = true;
-                selectObj.add(opt, selectObj.options[selectObj.options.length - 1]);
+  // pick up any categories present in the data that aren't in our known lists
+  expenses.forEach(row => {
+    const cat = row.category;
+    if (cat && !allCategories().includes(cat)) customCategories.push(cat);
+  });
+  rebuildCategorySelect();
+  rebuildPdfCategorySelect();
 
-                const pdfOpt = document.createElement("option");
-                pdfOpt.value = newName;
-                pdfOpt.text = newName;
-                document.getElementById('pdfCategoryFilter').add(pdfOpt);
-            } else {
-                selectObj.value = "";
-            }
-        }
-    }
+  renderTable();
+  renderSummary();
 
-    function loadExpenses() {
-        document.getElementById('status').innerText = "Syncing with Google Sheet...";
-        
-        const oldScript = document.getElementById('jsonpScript');
-        if (oldScript) oldScript.remove();
+  document.getElementById("statusLine").textContent =
+    `Synced — ${expenses.length} entr${expenses.length === 1 ? "y" : "ies"} loaded.`;
+}
 
-        const script = document.createElement('script');
-        script.id = 'jsonpScript';
-        script.src = `${SCRIPT_URL}?callback=handleData&_=${new Date().getTime()}`;
-        document.body.appendChild(script);
-    }
+/* Parses "{qty} pcs @ Rs {rate}/pc" out of the description field */
+function parseDescription(desc){
+  if (!desc) return { qty: "-", rate: "-" };
+  const match = String(desc).match(/^([\d.]+)\s*pcs\s*@\s*Rs\s*([\d.]+)\/pc/i);
+  if (!match) return { qty: "-", rate: "-" };
+  return { qty: match[1], rate: match[2] };
+}
 
-    function handleData(data) {
-        rawExpenses = data;
-        updateTable();
-        document.getElementById('status').innerText = "";
-    }
+function formatRs(amount){
+  const n = parseFloat(amount) || 0;
+  return "Rs " + n.toFixed(2);
+}
 
-    function updateTable() {
-        const tableBody = document.getElementById('expenseTableBody');
-        tableBody.innerHTML = '';
-        let total = 0;
+function renderSummary(){
+  const total = expenses.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
+  document.getElementById("totalSpent").textContent = formatRs(total);
+  document.getElementById("totalEntries").textContent = expenses.length;
+}
 
-        rawExpenses.forEach((item, index) => {
-            const amt = parseFloat(item.amount || 0);
-            total += amt;
+function renderTable(){
+  const tbody = document.getElementById("expenseTableBody");
+  tbody.innerHTML = "";
 
-            const formattedDate = formatDateDMY(item.date);
-            const details = parseDetails(item.description);
+  if (expenses.length === 0){
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="6">No expenses logged yet — add your first entry above.</td></tr>`;
+    return;
+  }
 
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${formattedDate}</td>
-                <td>${item.category}</td>
-                <td>${details.qty}</td>
-                <td>${details.rate !== '-' ? 'Rs ' + parseFloat(details.rate).toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
-                <td>Rs ${amt.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                <td><button class="delete-btn" onclick="deleteExpense(${index})">Delete</button></td>
-            `;
-            tableBody.appendChild(row);
-        });
+  expenses.forEach((row, index) => {
+    const { qty, rate } = parseDescription(row.description);
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.date || "-"}</td>
+      <td>${row.category || "-"}</td>
+      <td class="num">${qty}</td>
+      <td class="num">${rate}</td>
+      <td class="num">${formatRs(row.amount)}</td>
+      <td><button type="button" class="del-btn" data-index="${index}">Delete</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
 
-        document.getElementById('totalSpent').innerText = `Rs ${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-        document.getElementById('totalEntries').innerText = rawExpenses.length;
-    }
+  tbody.querySelectorAll(".del-btn").forEach(btn => {
+    btn.addEventListener("click", () => deleteExpense(parseInt(btn.dataset.index, 10), btn));
+  });
+}
 
-    document.getElementById('expenseForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const submitBtn = document.getElementById('submitBtn');
-        submitBtn.disabled = true;
-        submitBtn.innerText = "Saving...";
+/* ============================================================
+   HIDDEN-IFRAME FORM SUBMISSION (create + delete)
+   ============================================================ */
+function postToSheet(payload, onDone){
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = SCRIPT_URL;
+  form.target = "hidden_iframe";
+  form.style.display = "none";
 
-        const qtyVal = document.getElementById('qty').value;
-        const rateVal = document.getElementById('rate').value;
-        let autoDesc = (qtyVal && rateVal) ? `${qtyVal} pcs @ Rs ${rateVal}/pc` : "";
+  Object.keys(payload).forEach(key => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = key;
+    input.value = payload[key];
+    form.appendChild(input);
+  });
 
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = SCRIPT_URL;
-        form.target = 'hidden_iframe';
+  document.body.appendChild(form);
 
-        const fields = {
-            date: document.getElementById('date').value,
-            category: document.getElementById('category').value,
-            description: autoDesc,
-            amount: document.getElementById('amount').value
-        };
+  const iframe = document.getElementById("hidden_iframe");
+  const handleLoad = function(){
+    iframe.removeEventListener("load", handleLoad);
+    form.remove();
+    if (onDone) onDone();
+  };
+  iframe.addEventListener("load", handleLoad);
+  form.submit();
+}
 
-        for (const key in fields) {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = key;
-            input.value = fields[key];
-            form.appendChild(input);
-        }
+/* ============================================================
+   ADD EXPENSE
+   ============================================================ */
+document.getElementById("expenseForm").addEventListener("submit", function(e){
+  e.preventDefault();
 
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form);
+  const submitBtn = document.getElementById("submitBtn");
+  const categorySelect = document.getElementById("categorySelect");
+  const amount = amountInput.value;
 
-        document.getElementById('qty').value = '';
-        document.getElementById('rate').value = '';
-        document.getElementById('amount').value = '';
+  if (!amount || isNaN(parseFloat(amount))){
+    alert("Please enter a valid total amount.");
+    return;
+  }
+  if (categorySelect.value === "__add_custom__"){
+    alert("Please choose or add a category first.");
+    return;
+  }
 
-        setTimeout(() => {
-            submitBtn.disabled = false;
-            submitBtn.innerText = "Add Expense";
-            loadExpenses();
-            focusDateInput();
-        }, 2000);
-    });
+  const qty = qtyInput.value;
+  const rate = rateInput.value;
+  let description = "";
+  if (qty && rate && !isNaN(parseFloat(qty)) && !isNaN(parseFloat(rate))){
+    description = `${qty} pcs @ Rs ${rate}/pc`;
+  }
 
-    function deleteExpense(index) {
-        if (!confirm("Are you sure you want to delete this item?")) return;
-        
-        document.getElementById('status').innerText = "Deleting...";
+  const payload = {
+    date: dateInput.value,
+    category: categorySelect.value,
+    description: description,
+    amount: amount
+  };
 
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = SCRIPT_URL;
-        form.target = 'hidden_iframe';
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Saving...";
+  document.getElementById("statusLine").textContent = "Saving expense…";
 
-        const fields = { action: "delete", index: index };
-        for (const key in fields) {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = key;
-            input.value = fields[key];
-            form.appendChild(input);
-        }
+  postToSheet(payload, function(){
+    // reset form fields, keep category selection convenient
+    todaySegments();
+    renderDate();
+    qtyInput.value = "";
+    rateInput.value = "";
+    amountInput.value = "";
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Add Expense";
+    // Apps Script needs a brief moment to commit the row before we re-fetch
+    setTimeout(loadExpenses, 900);
+  });
+});
 
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form);
+/* ============================================================
+   DELETE EXPENSE
+   ============================================================ */
+function deleteExpense(index, btnEl){
+  if (!confirm("Delete this expense entry?")) return;
 
-        setTimeout(loadExpenses, 2000);
-    }
+  document.querySelectorAll(".del-btn").forEach(b => b.disabled = true);
+  document.getElementById("statusLine").textContent = "Deleting expense…";
 
-    function exportToCSV() {
-        if (rawExpenses.length === 0) {
-            alert("No data to export!");
-            return;
-        }
+  postToSheet({ action: "delete", index: index }, function(){
+    setTimeout(loadExpenses, 900);
+  });
+}
 
-        let csvContent = "data:text/csv;charset=utf-8,Date (DD/MM/YYYY),Category,Quantity,Rate Per Piece (Rs),Total Amount (Rs)\n";
-        rawExpenses.forEach(e => {
-            const formattedDate = formatDateDMY(e.date);
-            const details = parseDetails(e.description);
-            csvContent += `"${formattedDate}","${e.category}","${details.qty}","${details.rate}","${e.amount}"\n`;
-        });
+/* ============================================================
+   CSV EXPORT
+   ============================================================ */
+document.getElementById("exportCsvBtn").addEventListener("click", function(){
+  if (expenses.length === 0){
+    alert("No expenses to export yet.");
+    return;
+  }
 
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `construction_expenses.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
+  const header = ["Date", "Category", "Quantity", "Rate Per Piece (Rs)", "Total Amount (Rs)"];
+  const rows = expenses.map(row => {
+    const { qty, rate } = parseDescription(row.description);
+    return [row.date, row.category, qty, rate, (parseFloat(row.amount) || 0).toFixed(2)];
+  });
 
-    function generatePDF() {
-        if (rawExpenses.length === 0) {
-            alert("No data available to generate PDF!");
-            return;
-        }
+  const csvContent = [header, ...rows]
+    .map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
 
-        const selectedCategory = document.getElementById('pdfCategoryFilter').value;
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `construction-expenses-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+});
 
-        let filteredExpenses = rawExpenses;
-        if (selectedCategory !== "ALL") {
-            filteredExpenses = rawExpenses.filter(item => item.category === selectedCategory);
-        }
+/* ============================================================
+   CATEGORY-FILTERED PDF REPORT
+   ============================================================ */
+document.getElementById("generatePdfBtn").addEventListener("click", function(){
+  const { jsPDF } = window.jspdf;
+  const selectedCategory = document.getElementById("pdfCategorySelect").value;
 
-        if (filteredExpenses.length === 0) {
-            alert(`No expenses found for category: ${selectedCategory}`);
-            return;
-        }
+  const filtered = selectedCategory === "__all__"
+    ? expenses
+    : expenses.filter(row => row.category === selectedCategory);
 
-        doc.setFontSize(18);
-        doc.text("Home Construction Expense Report", 14, 20);
-        
-        doc.setFontSize(11);
-        doc.setTextColor(100);
-        doc.text(`Category: ${selectedCategory}`, 14, 28);
-        doc.text(`Generated On: ${getTodayDMY()}`, 14, 34);
+  if (filtered.length === 0){
+    alert("No expenses found for this category.");
+    return;
+  }
 
-        let tableRows = [];
-        let categoryTotal = 0;
+  const doc = new jsPDF();
+  const categoryLabel = selectedCategory === "__all__" ? "All Categories" : selectedCategory;
 
-        filteredExpenses.forEach(item => {
-            const amt = parseFloat(item.amount || 0);
-            categoryTotal += amt;
-            const details = parseDetails(item.description);
-            
-            tableRows.push([
-                formatDateDMY(item.date),
-                item.category,
-                details.qty,
-                details.rate !== '-' ? `Rs ${parseFloat(details.rate).toFixed(2)}` : '-',
-                `Rs ${amt.toFixed(2)}`
-            ]);
-        });
+  doc.setFontSize(18);
+  doc.setFont(undefined, "bold");
+  doc.text("Home Construction Expense Report", 14, 18);
 
-        tableRows.push([
-            { content: 'Total', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } },
-            { content: `Rs ${categoryTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold' } }
-        ]);
+  doc.setFontSize(11);
+  doc.setFont(undefined, "normal");
+  doc.text(`Category: ${categoryLabel}`, 14, 26);
+  doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 32);
 
-        doc.autoTable({
-            startY: 40,
-            head: [['Date', 'Category', 'Qty', 'Rate / Piece', 'Total Amount']],
-            body: tableRows,
-            theme: 'striped',
-            headStyles: { fillColor: [52, 73, 94] }
-        });
+  const tableRows = filtered.map(row => {
+    const { qty, rate } = parseDescription(row.description);
+    return [row.date, row.category, qty, rate, formatRs(row.amount)];
+  });
 
-        const fileName = selectedCategory === "ALL" 
-            ? "Construction_Expenses_All.pdf" 
-            : `Construction_Expenses_${selectedCategory.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+  doc.autoTable({
+    startY: 38,
+    head: [["Date", "Category", "Quantity", "Rate / Piece (Rs)", "Total Amount"]],
+    body: tableRows,
+    headStyles: { fillColor: [22, 50, 79] },
+    styles: { fontSize: 10 }
+  });
 
-        doc.save(fileName);
-    }
+  const total = filtered.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
+  const finalY = doc.lastAutoTable.finalY || 38;
+  doc.setFontSize(12);
+  doc.setFont(undefined, "bold");
+  doc.text(`Total: ${formatRs(total)}`, 14, finalY + 12);
 
-    loadExpenses();
+  const fileSafeCategory = categoryLabel.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+  doc.save(`expense-report-${fileSafeCategory}.pdf`);
+});
+
+/* ============================================================
+   INIT
+   ============================================================ */
+rebuildCategorySelect();
+rebuildPdfCategorySelect();
+loadExpenses();
 </script>
 
 </body>
