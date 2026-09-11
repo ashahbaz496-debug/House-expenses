@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home Construction Expense Tracker</title>
-    <!-- Flatpickr CSS for custom DD/MM/YYYY datepicker -->
+    <!-- Flatpickr CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         * { box-sizing: border-box; font-family: Arial, sans-serif; }
@@ -88,7 +88,7 @@
 
     <!-- ADD EXPENSE FORM -->
     <form id="expenseForm">
-        <input type="text" id="date" placeholder="DD/MM/YYYY" required>
+        <input type="text" id="date" placeholder="DD/MM/YYYY" required autocomplete="off">
         <select id="category" class="shortcut-select" onchange="handleCategoryChange(this)" required>
             <option value="">Select Category</option>
             <option value="Foundation & Structure">Foundation & Structure</option>
@@ -131,11 +131,11 @@
             </div>
             <div>
                 <label>From Date (DD/MM/YYYY)</label>
-                <input type="text" id="filterFromDate" placeholder="DD/MM/YYYY" onchange="applyFilters()">
+                <input type="text" id="filterFromDate" placeholder="DD/MM/YYYY" autocomplete="off">
             </div>
             <div>
                 <label>To Date (DD/MM/YYYY)</label>
-                <input type="text" id="filterToDate" placeholder="DD/MM/YYYY" onchange="applyFilters()">
+                <input type="text" id="filterToDate" placeholder="DD/MM/YYYY" autocomplete="off">
             </div>
             <div>
                 <button class="reset-btn" onclick="resetFilters()">Reset Filters</button>
@@ -183,23 +183,57 @@
     let rawExpenses = [];
     let filteredExpenses = [];
 
-    // Initialize Flatpickr inputs with strict DD/MM/YYYY format
-    const datePicker = flatpickr("#date", {
+    // Custom DD/MM/YYYY parsing rule for manual keypad typing
+    function parseDMYDate(dateString) {
+        if (!dateString) return null;
+        const clean = dateString.replace(/[-.]/g, '/');
+        const parts = clean.split('/');
+        if (parts.length === 3) {
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            let year = parseInt(parts[2], 10);
+            if (year < 100) year += 2000;
+            return new Date(year, month, day);
+        }
+        return null;
+    }
+
+    const flatpickrConfig = {
         dateFormat: "d/m/Y",
+        allowInput: true,
+        parseDate: parseDMYDate
+    };
+
+    // Auto select text when clicking on the date input so keypad typing overwrites immediately
+    function enableKeypadDirectInput(elementId, pickerInstance) {
+        const el = document.getElementById(elementId);
+        el.addEventListener('focus', function() {
+            this.select();
+        });
+        el.addEventListener('click', function() {
+            this.select();
+        });
+    }
+
+    const datePicker = flatpickr("#date", {
+        ...flatpickrConfig,
         defaultDate: new Date()
     });
+    enableKeypadDirectInput("date", datePicker);
 
     const fromPicker = flatpickr("#filterFromDate", {
-        dateFormat: "d/m/Y",
+        ...flatpickrConfig,
         onChange: function() { applyFilters(); }
     });
+    enableKeypadDirectInput("filterFromDate", fromPicker);
 
     const toPicker = flatpickr("#filterToDate", {
-        dateFormat: "d/m/Y",
+        ...flatpickrConfig,
         onChange: function() { applyFilters(); }
     });
+    enableKeypadDirectInput("filterToDate", toPicker);
 
-    // Converts date strings into DD/MM/YYYY format
+    // Format ISO string to DD/MM/YYYY string display
     function formatDateDMY(rawDateStr) {
         if (!rawDateStr) return '';
         const cleanStr = String(rawDateStr).substring(0, 10);
@@ -212,7 +246,7 @@
         return rawDateStr;
     }
 
-    // Helper to get comparable YYYY-MM-DD for filter logic
+    // Convert typed DD/MM/YYYY to YYYY-MM-DD for database sorting and filtering
     function toISODate(dmyStr) {
         if (!dmyStr) return '';
         if (dmyStr.includes('/')) {
