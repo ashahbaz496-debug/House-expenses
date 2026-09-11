@@ -48,12 +48,21 @@
         .export-btn:hover { background: #219150; }
         .pdf-btn:hover { background: #71368a; }
 
+        /* Modal Styles */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; width: 90%; max-width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .modal-content h3 { margin-top: 0; color: #2c3e50; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .modal-btn { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .cancel-btn { background: #95a5a6; color: white; }
+        .confirm-btn { background: #8e44ad; color: white; }
+
         .by-line { text-align: center; margin-top: 20px; font-weight: bold; color: #555; border-top: 1px solid #ddd; padding-top: 15px; }
 
         @media print {
             body { background: white; padding: 0; }
             .container { box-shadow: none; border: none; width: 100%; max-width: 100%; padding: 0; }
-            form, .filter-section, .delete-btn, .action-bar, .loading { display: none !important; }
+            form, .filter-section, .delete-btn, .action-bar, .loading, .modal { display: none !important; }
             th:last-child, td:last-child { display: none !important; }
             .by-line { display: block !important; margin-top: 30px; font-size: 16px; border-top: 2px solid #333; }
             h1::before { content: "EXPENSES SUMMARY REPORT - "; }
@@ -152,7 +161,7 @@
     <div class="action-bar">
         <h3>📋 Itemized Record List</h3>
         <div class="btn-group">
-            <button class="pdf-btn" onclick="generatePDF()">📄 Save / Print as PDF</button>
+            <button class="pdf-btn" onclick="openPdfModal()">📄 Save / Print as PDF</button>
             <button class="export-btn" onclick="exportToCSV()">📥 Export to CSV</button>
         </div>
     </div>
@@ -164,7 +173,9 @@
             <tr>
                 <th>Date (DD/MM/YYYY)</th>
                 <th>Category</th>
-                <th>Amount</th>
+                <th>Quantity</th>
+                <th>Rate / Piece (Rs)</th>
+                <th>Total Amount</th>
                 <th class="action-col">Action</th>
             </tr>
         </thead>
@@ -172,6 +183,28 @@
     </table>
 
     <div class="by-line">CREATED BY AHMAD</div>
+</div>
+
+<!-- PDF CATEGORY SELECTION MODAL -->
+<div id="pdfModal" class="modal">
+    <div class="modal-content">
+        <h3>📄 Generate PDF Report</h3>
+        <label style="display:block; margin-bottom:8px; font-weight:bold; font-size:13px; color:#555;">Select Category to Include:</label>
+        <select id="pdfCategorySelect" style="width:100%; padding:10px; border-radius:5px; border:1px solid #ccc; font-size:14px;">
+            <option value="ALL">All Categories</option>
+            <option value="Foundation & Structure">Foundation & Structure</option>
+            <option value="Cement & Bricks">Cement & Bricks</option>
+            <option value="Labor">Labor</option>
+            <option value="Plumbing & Electrical">Plumbing & Electrical</option>
+            <option value="Finishing & Paint">Finishing & Paint</option>
+            <option value="Permits & Legal">Permits & Legal</option>
+            <option value="Other">Other</option>
+        </select>
+        <div class="modal-actions">
+            <button class="modal-btn cancel-btn" onclick="closePdfModal()">Cancel</button>
+            <button class="modal-btn confirm-btn" onclick="confirmPdfExport()">Print / Export PDF</button>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -193,21 +226,19 @@
     const dateInput = document.getElementById('date');
     dateInput.value = getTodayDMY();
 
-    // Focus and select the "DD" segment without erasing the field
     function focusDateInput() {
         dateInput.focus();
         if (dateInput.value.length === 10) {
-            dateInput.setSelectionRange(0, 2); // Selects 'DD' segment
+            dateInput.setSelectionRange(0, 2);
         }
     }
 
     function selectDaySegment(inputEl) {
         if (inputEl.value.length === 10) {
-            inputEl.setSelectionRange(0, 2); // Selects 'DD' segment
+            inputEl.setSelectionRange(0, 2);
         }
     }
 
-    // Auto-formatting and segment jump handler for DD/MM/YYYY fields
     function setupDateAutoFormat(inputId) {
         const el = document.getElementById(inputId);
         el.addEventListener('keydown', function(e) {
@@ -215,10 +246,10 @@
                 const cursorPos = el.selectionStart;
                 if (cursorPos <= 2) {
                     e.preventDefault();
-                    el.setSelectionRange(3, 5); // Select MM
+                    el.setSelectionRange(3, 5);
                 } else if (cursorPos <= 5) {
                     e.preventDefault();
-                    el.setSelectionRange(6, 10); // Select YYYY
+                    el.setSelectionRange(6, 10);
                 }
             }
         });
@@ -226,7 +257,6 @@
 
     setupDateAutoFormat('date');
 
-    // Convert string date (YYYY-MM-DD or DD/MM/YYYY) to DD/MM/YYYY standard string
     function formatDateDMY(rawDateStr) {
         if (!rawDateStr) return '';
         const cleanStr = String(rawDateStr).substring(0, 10);
@@ -237,7 +267,6 @@
         return cleanStr;
     }
 
-    // Convert DD/MM/YYYY string to Comparable YYYYMMDD integer for filtering
     function dmyToSortable(dmyStr) {
         if (!dmyStr) return '';
         const parts = dmyStr.split('/');
@@ -247,7 +276,16 @@
         return dmyStr.replace(/-/g, '');
     }
 
-    // Category shortcut handler
+    // Parse description like "10 pcs @ Rs 50/pc" to extract quantity & rate
+    function parseDetails(description) {
+        if (!description) return { qty: '-', rate: '-' };
+        const match = description.match(/([\d\.]+)\s*pcs\s*@\s*Rs\s*([\d\.]+)\/pc/i);
+        if (match) {
+            return { qty: match[1], rate: match[2] };
+        }
+        return { qty: '-', rate: '-' };
+    }
+
     let hoveredSelect = null;
     document.querySelectorAll('.shortcut-select').forEach(selectEl => {
         selectEl.addEventListener('mouseenter', () => { hoveredSelect = selectEl; });
@@ -268,7 +306,6 @@
         }
     });
 
-    // Optional Rate Calculation
     function calculateTotal() {
         const qty = parseFloat(document.getElementById('qty').value) || 0;
         const rate = parseFloat(document.getElementById('rate').value) || 0;
@@ -289,11 +326,13 @@
                 opt.selected = true;
                 selectObj.add(opt, selectObj.options[selectObj.options.length - 1]);
 
-                const filterSelect = document.getElementById('filterCategory');
-                const filterOpt = document.createElement("option");
-                filterOpt.value = newName;
-                filterOpt.text = newName;
-                filterSelect.add(filterOpt);
+                ['filterCategory', 'pdfCategorySelect'].forEach(id => {
+                    const sel = document.getElementById(id);
+                    const filterOpt = document.createElement("option");
+                    filterOpt.value = newName;
+                    filterOpt.text = newName;
+                    sel.add(filterOpt);
+                });
             } else {
                 selectObj.value = "";
             }
@@ -368,11 +407,14 @@
             categoryTotals[item.category] += amt;
 
             const formattedDate = formatDateDMY(item.date);
+            const details = parseDetails(item.description);
 
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${formattedDate}</td>
                 <td>${item.category}</td>
+                <td>${details.qty}</td>
+                <td>${details.rate !== '-' ? 'Rs ' + parseFloat(details.rate).toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}</td>
                 <td>Rs ${amt.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 <td class="action-col"><button class="delete-btn" onclick="deleteExpense(${index})">Delete</button></td>
             `;
@@ -435,8 +477,6 @@
         } finally {
             submitBtn.disabled = false;
             submitBtn.innerText = "Add Expense";
-            
-            // Redirect focus back to the date input field for fast continuous entry
             focusDateInput();
         }
     });
@@ -464,10 +504,11 @@
             return;
         }
 
-        let csvContent = "data:text/csv;charset=utf-8,Date (DD/MM/YYYY),Category,Amount\n";
+        let csvContent = "data:text/csv;charset=utf-8,Date (DD/MM/YYYY),Category,Quantity,Rate Per Piece (Rs),Total Amount (Rs)\n";
         filteredExpenses.forEach(e => {
             const formattedDate = formatDateDMY(e.date);
-            csvContent += `"${formattedDate}","${e.category}","${e.amount}"\n`;
+            const details = parseDetails(e.description);
+            csvContent += `"${formattedDate}","${e.category}","${details.qty}","${details.rate}","${e.amount}"\n`;
         });
 
         const encodedUri = encodeURI(csvContent);
@@ -479,8 +520,30 @@
         document.body.removeChild(link);
     }
 
-    function generatePDF() {
-        window.print();
+    // Modal PDF Controls
+    function openPdfModal() {
+        document.getElementById('pdfModal').style.display = 'flex';
+    }
+
+    function closePdfModal() {
+        document.getElementById('pdfModal').style.display = 'none';
+    }
+
+    function confirmPdfExport() {
+        const selectedCat = document.getElementById('pdfCategorySelect').value;
+        const currentFilterCat = document.getElementById('filterCategory').value;
+
+        // Apply selected PDF category to table view before printing
+        document.getElementById('filterCategory').value = selectedCat;
+        applyFilters();
+        closePdfModal();
+
+        setTimeout(() => {
+            window.print();
+            // Restore previous user filter after print dialog closes
+            document.getElementById('filterCategory').value = currentFilterCat;
+            applyFilters();
+        }, 300);
     }
 
     loadExpenses();
