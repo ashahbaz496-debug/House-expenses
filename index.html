@@ -45,12 +45,11 @@
 
         .by-line { text-align: center; margin-top: 20px; font-weight: bold; color: #555; border-top: 1px solid #ddd; padding-top: 15px; }
 
-        /* PRINT / PDF STYLES */
         @media print {
             body { background: white; padding: 0; }
             .container { box-shadow: none; border: none; width: 100%; max-width: 100%; padding: 0; }
             form, .filter-section, .delete-btn, .action-bar, .loading { display: none !important; }
-            th:last-child, td:last-child { display: none !important; } /* Hide Action/Delete column */
+            th:last-child, td:last-child { display: none !important; }
             .by-line { display: block !important; margin-top: 30px; font-size: 16px; border-top: 2px solid #333; }
             h1::before { content: "EXPENSES SUMMARY REPORT - "; }
         }
@@ -72,7 +71,7 @@
     <div class="grid">
         <div class="card">
             <h3>Total Spent (Filtered)</h3>
-            <p id="totalSpent">$0.00</p>
+            <p id="totalSpent">Rs 0.00</p>
         </div>
         <div class="card">
             <h3>Total Entries</h3>
@@ -94,7 +93,7 @@
             <option value="Other">Other</option>
         </select>
         <input type="text" id="description" placeholder="Description (e.g. 50 bags cement)" required>
-        <input type="number" id="amount" placeholder="Amount" step="0.01" required>
+        <input type="number" id="amount" placeholder="Amount (Rs)" step="0.01" required>
         <button type="submit" id="submitBtn">Add Expense</button>
     </form>
 
@@ -133,7 +132,6 @@
     <div class="summary-box">
         <h3>📊 Category Breakdown (Verification)</h3>
         <div id="categorySummary" class="summary-list">
-            <!-- Dynamically calculated breakdown -->
         </div>
     </div>
 
@@ -171,17 +169,27 @@
     let filteredExpenses = [];
     document.getElementById('date').valueAsDate = new Date();
 
-    async function loadExpenses() {
+    function loadExpenses() {
         document.getElementById('status').innerText = "Syncing with Google Sheet...";
-        try {
-            const response = await fetch(SCRIPT_URL, { redirect: "follow" });
-            rawExpenses = await response.json();
-            applyFilters();
-            document.getElementById('status').innerText = "";
-        } catch (error) {
-            document.getElementById('status').innerText = "Error syncing with Google Sheet. Make sure permissions are set to 'Anyone'.";
-            console.error(error);
-        }
+        
+        const oldScript = document.getElementById('jsonp-fetch');
+        if (oldScript) oldScript.remove();
+
+        const script = document.createElement('script');
+        script.id = 'jsonp-fetch';
+        script.src = `${SCRIPT_URL}?callback=handleData`;
+        
+        script.onerror = function() {
+            document.getElementById('status').innerText = "Error syncing with Google Sheet.";
+        };
+        
+        document.body.appendChild(script);
+    }
+
+    function handleData(data) {
+        rawExpenses = data;
+        applyFilters();
+        document.getElementById('status').innerText = "";
     }
 
     function applyFilters() {
@@ -228,13 +236,13 @@
                 <td>${item.date ? String(item.date).substring(0, 10) : ''}</td>
                 <td>${item.category}</td>
                 <td>${item.description}</td>
-                <td>${amt.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                <td>Rs ${amt.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 <td class="action-col"><button class="delete-btn" onclick="deleteExpense(${index})">Delete</button></td>
             `;
             tableBody.appendChild(row);
         });
 
-        document.getElementById('totalSpent').innerText = total.toLocaleString(undefined, {minimumFractionDigits: 2});
+        document.getElementById('totalSpent').innerText = `Rs ${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
         document.getElementById('totalEntries').innerText = filteredExpenses.length;
 
         const summaryContainer = document.getElementById('categorySummary');
@@ -245,7 +253,7 @@
             for (const [cat, sum] of Object.entries(categoryTotals)) {
                 const card = document.createElement('div');
                 card.className = 'summary-item';
-                card.innerHTML = `<strong>${cat}</strong><br><span style="color:#27ae60; font-weight:bold;">$${sum.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>`;
+                card.innerHTML = `<strong>${cat}</strong><br><span style="color:#27ae60; font-weight:bold;">Rs ${sum.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>`;
                 summaryContainer.appendChild(card);
             }
         }
