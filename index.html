@@ -129,7 +129,7 @@
 <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
 
 <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbziPhATcbMdyfi2xbWCVmGm032Lm2HQ-iT3-CMW7jetzKCLZtcdud9WOveoim6hwbac/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSytyYT-JH07VEjqw4rlPs5iR6Mf5Aw-OQ1IAGEa45a7FpCRVKVpGt2KERIubJzosl/exec";
 
     let rawExpenses = [];
 
@@ -208,14 +208,12 @@
             if (customCat && customCat.trim() !== "") {
                 const newName = customCat.trim();
                 
-                // Add option to entry dropdown
                 const opt = document.createElement("option");
                 opt.value = newName;
                 opt.text = newName;
                 opt.selected = true;
                 selectObj.add(opt, selectObj.options[selectObj.options.length - 1]);
 
-                // Add option to PDF Filter dropdown as well
                 const pdfOpt = document.createElement("option");
                 pdfOpt.value = newName;
                 pdfOpt.text = newName;
@@ -366,7 +364,6 @@
         document.body.removeChild(link);
     }
 
-    // PDF GENERATOR BY CATEGORY FUNCTION
     function generatePDF() {
         if (rawExpenses.length === 0) {
             alert("No data available to generate PDF!");
@@ -377,7 +374,6 @@
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
 
-        // Filter items
         let filteredExpenses = rawExpenses;
         if (selectedCategory !== "ALL") {
             filteredExpenses = rawExpenses.filter(item => item.category === selectedCategory);
@@ -388,7 +384,6 @@
             return;
         }
 
-        // Header Title
         doc.setFontSize(18);
         doc.text("Home Construction Expense Report", 14, 20);
         
@@ -397,7 +392,6 @@
         doc.text(`Category: ${selectedCategory}`, 14, 28);
         doc.text(`Generated On: ${getTodayDMY()}`, 14, 34);
 
-        // Build PDF Table Rows
         let tableRows = [];
         let categoryTotal = 0;
 
@@ -415,13 +409,11 @@
             ]);
         });
 
-        // Add Summary Row
         tableRows.push([
             { content: 'Total', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } },
             { content: `Rs ${categoryTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold' } }
         ]);
 
-        // Draw Table
         doc.autoTable({
             startY: 40,
             head: [['Date', 'Category', 'Qty', 'Rate / Piece', 'Total Amount']],
@@ -430,7 +422,6 @@
             headStyles: { fillColor: [52, 73, 94] }
         });
 
-        // Save PDF
         const fileName = selectedCategory === "ALL" 
             ? "Construction_Expenses_All.pdf" 
             : `Construction_Expenses_${selectedCategory.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
