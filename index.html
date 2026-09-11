@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home Construction Expense Tracker</title>
-    <!-- Flatpickr CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <style>
         * { box-sizing: border-box; font-family: Arial, sans-serif; }
         body { background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
@@ -88,7 +86,7 @@
 
     <!-- ADD EXPENSE FORM -->
     <form id="expenseForm">
-        <input type="text" id="date" placeholder="DD/MM/YYYY" required autocomplete="off">
+        <input type="date" id="date" required>
         <select id="category" class="shortcut-select" onchange="handleCategoryChange(this)" required>
             <option value="">Select Category</option>
             <option value="Foundation & Structure">Foundation & Structure</option>
@@ -130,12 +128,12 @@
                 </select>
             </div>
             <div>
-                <label>From Date (DD/MM/YYYY)</label>
-                <input type="text" id="filterFromDate" placeholder="DD/MM/YYYY" autocomplete="off">
+                <label>From Date</label>
+                <input type="date" id="filterFromDate" onchange="applyFilters()">
             </div>
             <div>
-                <label>To Date (DD/MM/YYYY)</label>
-                <input type="text" id="filterToDate" placeholder="DD/MM/YYYY" autocomplete="off">
+                <label>To Date</label>
+                <input type="date" id="filterToDate" onchange="applyFilters()">
             </div>
             <div>
                 <button class="reset-btn" onclick="resetFilters()">Reset Filters</button>
@@ -174,91 +172,31 @@
     <div class="by-line">CREATED BY AHMAD</div>
 </div>
 
-<!-- Flatpickr JS -->
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-
 <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxJwX1Azql-Op5hrukxI2wPiCz6lzB6oiesMRyoQSq_AhNviSzrIkAoaQqsLrrk4Ae0/exec";
 
     let rawExpenses = [];
     let filteredExpenses = [];
 
-    // Custom DD/MM/YYYY parsing rule for manual keypad typing
-    function parseDMYDate(dateString) {
-        if (!dateString) return null;
-        const clean = dateString.replace(/[-.]/g, '/');
-        const parts = clean.split('/');
-        if (parts.length === 3) {
-            const day = parseInt(parts[0], 10);
-            const month = parseInt(parts[1], 10) - 1;
-            let year = parseInt(parts[2], 10);
-            if (year < 100) year += 2000;
-            return new Date(year, month, day);
-        }
-        return null;
-    }
+    // Set today's date into the segmented field on load
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    document.getElementById('date').value = `${yyyy}-${mm}-${dd}`;
 
-    const flatpickrConfig = {
-        dateFormat: "d/m/Y",
-        allowInput: true,
-        parseDate: parseDMYDate
-    };
-
-    // Auto select text when clicking on the date input so keypad typing overwrites immediately
-    function enableKeypadDirectInput(elementId, pickerInstance) {
-        const el = document.getElementById(elementId);
-        el.addEventListener('focus', function() {
-            this.select();
-        });
-        el.addEventListener('click', function() {
-            this.select();
-        });
-    }
-
-    const datePicker = flatpickr("#date", {
-        ...flatpickrConfig,
-        defaultDate: new Date()
-    });
-    enableKeypadDirectInput("date", datePicker);
-
-    const fromPicker = flatpickr("#filterFromDate", {
-        ...flatpickrConfig,
-        onChange: function() { applyFilters(); }
-    });
-    enableKeypadDirectInput("filterFromDate", fromPicker);
-
-    const toPicker = flatpickr("#filterToDate", {
-        ...flatpickrConfig,
-        onChange: function() { applyFilters(); }
-    });
-    enableKeypadDirectInput("filterToDate", toPicker);
-
-    // Format ISO string to DD/MM/YYYY string display
+    // Format YYYY-MM-DD or ISO string to DD/MM/YYYY for table and CSV view
     function formatDateDMY(rawDateStr) {
         if (!rawDateStr) return '';
         const cleanStr = String(rawDateStr).substring(0, 10);
-        if (cleanStr.includes('-')) {
-            const parts = cleanStr.split('-');
-            if (parts.length === 3) {
-                return `${parts[2]}/${parts[1]}/${parts[0]}`;
-            }
+        const parts = cleanStr.split('-');
+        if (parts.length === 3) {
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
         }
         return rawDateStr;
     }
 
-    // Convert typed DD/MM/YYYY to YYYY-MM-DD for database sorting and filtering
-    function toISODate(dmyStr) {
-        if (!dmyStr) return '';
-        if (dmyStr.includes('/')) {
-            const parts = dmyStr.split('/');
-            if (parts.length === 3) {
-                return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-            }
-        }
-        return dmyStr.substring(0, 10);
-    }
-
-    // Hover Keyboard Shortcut Handler for Category Selection
+    // Category shortcut keyboard handler
     let hoveredSelect = null;
     document.querySelectorAll('.shortcut-select').forEach(selectEl => {
         selectEl.addEventListener('mouseenter', () => { hoveredSelect = selectEl; });
@@ -335,14 +273,14 @@
 
     function applyFilters() {
         const category = document.getElementById('filterCategory').value;
-        const fromDateISO = toISODate(document.getElementById('filterFromDate').value);
-        const toDateISO = toISODate(document.getElementById('filterToDate').value);
+        const fromDate = document.getElementById('filterFromDate').value;
+        const toDate = document.getElementById('filterToDate').value;
 
         filteredExpenses = rawExpenses.filter(item => {
-            const itemDateISO = item.date ? String(item.date).substring(0, 10) : '';
+            const itemDate = item.date ? String(item.date).substring(0, 10) : '';
             const categoryMatch = (category === 'ALL' || item.category === category);
-            const fromMatch = !fromDateISO || (itemDateISO >= fromDateISO);
-            const toMatch = !toDateISO || (itemDateISO <= toDateISO);
+            const fromMatch = !fromDate || (itemDate >= fromDate);
+            const toMatch = !toDate || (itemDate <= toDate);
 
             return categoryMatch && fromMatch && toMatch;
         });
@@ -352,8 +290,8 @@
 
     function resetFilters() {
         document.getElementById('filterCategory').value = 'ALL';
-        fromPicker.clear();
-        toPicker.clear();
+        document.getElementById('filterFromDate').value = '';
+        document.getElementById('filterToDate').value = '';
         applyFilters();
     }
 
@@ -415,11 +353,8 @@
             autoDesc = `${qtyVal} pcs @ Rs ${rateVal}/pc`;
         }
 
-        const rawSelectedDate = document.getElementById('date').value;
-        const isoDate = toISODate(rawSelectedDate);
-
         const newExpense = {
-            date: isoDate,
+            date: document.getElementById('date').value,
             category: document.getElementById('category').value,
             description: autoDesc,
             amount: document.getElementById('amount').value
