@@ -13,11 +13,16 @@
         .card { background: #eef2f7; padding: 15px; border-radius: 8px; text-align: center; }
         .card h3 { margin: 0; color: #555; }
         .card p { font-size: 24px; font-weight: bold; color: #27ae60; margin: 10px 0 0 0; }
+        
         form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 25px; background: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
         form input, form select, form button { padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 14px; }
-        form button { grid-column: span 2; background: #2980b9; color: white; border: none; cursor: pointer; font-size: 16px; font-weight: bold; }
+        .full-width { grid-column: span 2; }
+        form button { background: #2980b9; color: white; border: none; cursor: pointer; font-size: 16px; font-weight: bold; }
         form button:hover { background: #3498db; }
         
+        .calc-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; grid-column: span 2; background: #eaeaea; padding: 10px; border-radius: 5px; }
+        .calc-group label { font-size: 12px; font-weight: bold; color: #555; grid-column: span 2; }
+
         .filter-section { background: #eef2f7; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
         .filter-grid { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: center; }
         .filter-grid label { font-size: 12px; font-weight: bold; color: #555; display: block; margin-bottom: 3px; }
@@ -55,8 +60,8 @@
         }
 
         @media (max-width: 700px) {
-            .grid, form, .filter-grid { grid-template-columns: 1fr; }
-            form button { grid-column: span 1; }
+            .grid, form, .filter-grid, .calc-group { grid-template-columns: 1fr; }
+            .full-width, form button, .calc-group label { grid-column: span 1; }
             .reset-btn { margin-top: 0; }
             .action-bar { flex-direction: column; align-items: stretch; }
             .btn-group { flex-direction: column; }
@@ -82,7 +87,7 @@
     <!-- ADD EXPENSE FORM -->
     <form id="expenseForm">
         <input type="date" id="date" required>
-        <select id="category" required>
+        <select id="category" class="shortcut-select" onchange="handleCategoryChange(this)" required>
             <option value="">Select Category</option>
             <option value="Foundation & Structure">Foundation & Structure</option>
             <option value="Cement & Bricks">Cement & Bricks</option>
@@ -91,10 +96,20 @@
             <option value="Finishing & Paint">Finishing & Paint</option>
             <option value="Permits & Legal">Permits & Legal</option>
             <option value="Other">Other</option>
+            <option value="NEW_CATEGORY">➕ Add Custom Category...</option>
         </select>
-        <input type="text" id="description" placeholder="Description (e.g. 50 bags cement)" required>
-        <input type="number" id="amount" placeholder="Amount (Rs)" step="0.01" required>
-        <button type="submit" id="submitBtn">Add Expense</button>
+        
+        <input type="text" id="description" class="full-width" placeholder="Description (e.g. Bricks or Cement Bags)" required>
+        
+        <!-- Rate Calculator Section -->
+        <div class="calc-group">
+            <label>📐 Optional Unit/Rate Calculator (Qty × Rate = Total Amount)</label>
+            <input type="number" id="qty" placeholder="Quantity / Pieces" step="any" oninput="calculateTotal()">
+            <input type="number" id="rate" placeholder="Rate Per Piece (Rs)" step="any" oninput="calculateTotal()">
+        </div>
+
+        <input type="number" id="amount" class="full-width" placeholder="Total Amount (Rs)" step="0.01" required>
+        <button type="submit" id="submitBtn" class="full-width">Add Expense</button>
     </form>
 
     <!-- FILTER & VERIFICATION SECTION -->
@@ -103,7 +118,7 @@
         <div class="filter-grid">
             <div>
                 <label>Category</label>
-                <select id="filterCategory" onchange="applyFilters()">
+                <select id="filterCategory" class="shortcut-select" onchange="applyFilters()">
                     <option value="ALL">All Categories</option>
                     <option value="Foundation & Structure">Foundation & Structure</option>
                     <option value="Cement & Bricks">Cement & Bricks</option>
@@ -131,8 +146,7 @@
     <!-- CATEGORY SUMMARY BREAKDOWN -->
     <div class="summary-box">
         <h3>📊 Category Breakdown (Verification)</h3>
-        <div id="categorySummary" class="summary-list">
-        </div>
+        <div id="categorySummary" class="summary-list"></div>
     </div>
 
     <div class="action-bar">
@@ -155,8 +169,7 @@
                 <th class="action-col">Action</th>
             </tr>
         </thead>
-        <tbody id="expenseTableBody">
-        </tbody>
+        <tbody id="expenseTableBody"></tbody>
     </table>
 
     <div class="by-line">CREATED BY AHMAD</div>
@@ -168,6 +181,60 @@
     let rawExpenses = [];
     let filteredExpenses = [];
     document.getElementById('date').valueAsDate = new Date();
+
+    // Hover Keyboard Shortcut Handler
+    let hoveredSelect = null;
+    document.querySelectorAll('.shortcut-select').forEach(selectEl => {
+        selectEl.addEventListener('mouseenter', () => { hoveredSelect = selectEl; });
+        selectEl.addEventListener('mouseleave', () => { hoveredSelect = null; });
+    });
+
+    window.addEventListener('keydown', (e) => {
+        if (hoveredSelect && e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
+            const pressedKey = e.key.toLowerCase();
+            for (let i = 0; i < hoveredSelect.options.length; i++) {
+                const optText = hoveredSelect.options[i].text.trim().toLowerCase();
+                if (optText.startsWith(pressedKey)) {
+                    hoveredSelect.selectedIndex = i;
+                    hoveredSelect.dispatchEvent(new Event('change'));
+                    break;
+                }
+            }
+        }
+    });
+
+    function calculateTotal() {
+        const qty = parseFloat(document.getElementById('qty').value) || 0;
+        const rate = parseFloat(document.getElementById('rate').value) || 0;
+        if (qty > 0 && rate > 0) {
+            document.getElementById('amount').value = (qty * rate).toFixed(2);
+        }
+    }
+
+    function handleCategoryChange(selectObj) {
+        if (selectObj.value === "NEW_CATEGORY") {
+            const customCat = prompt("Enter new category name:");
+            if (customCat && customCat.trim() !== "") {
+                const newName = customCat.trim();
+                
+                // Add to main form dropdown
+                const opt = document.createElement("option");
+                opt.value = newName;
+                opt.text = newName;
+                opt.selected = true;
+                selectObj.add(opt, selectObj.options[selectObj.options.length - 1]);
+
+                // Add to filter dropdown
+                const filterSelect = document.getElementById('filterCategory');
+                const filterOpt = document.createElement("option");
+                filterOpt.value = newName;
+                filterOpt.text = newName;
+                filterSelect.add(filterOpt);
+            } else {
+                selectObj.value = "";
+            }
+        }
+    }
 
     function loadExpenses() {
         document.getElementById('status').innerText = "Syncing with Google Sheet...";
@@ -265,10 +332,18 @@
         submitBtn.disabled = true;
         submitBtn.innerText = "Saving...";
 
+        const qtyVal = document.getElementById('qty').value;
+        const rateVal = document.getElementById('rate').value;
+        let desc = document.getElementById('description').value;
+
+        if (qtyVal && rateVal) {
+            desc += ` (${qtyVal} pcs @ Rs ${rateVal}/pc)`;
+        }
+
         const newExpense = {
             date: document.getElementById('date').value,
             category: document.getElementById('category').value,
-            description: document.getElementById('description').value,
+            description: desc,
             amount: document.getElementById('amount').value
         };
 
@@ -281,6 +356,8 @@
             });
 
             document.getElementById('description').value = '';
+            document.getElementById('qty').value = '';
+            document.getElementById('rate').value = '';
             document.getElementById('amount').value = '';
             
             setTimeout(loadExpenses, 2000);
