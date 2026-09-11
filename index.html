@@ -394,7 +394,99 @@
 /* ============================================================
    CONFIG
    ============================================================ */
-const SCRIPT_URL = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec"; // <-- replace with your Apps Script Web App URL
+const SCRIPT_URL = "/**
+ * Home Construction Expense Tracker — Google Apps Script backend.
+ *
+ * Deploy: Extensions > Apps Script > paste this file > Deploy > New deployment
+ *         > type "Web app" > Execute as "Me" > Who has access "Anyone".
+ *         Copy the resulting /exec URL into SCRIPT_URL in index.html.
+ *
+ * Sheet layout (row 1 = headers): date | category | description | amount
+ */
+
+function getSheet_() {
+  return SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+}
+
+/**
+ * GET handler — returns all rows as JSON, wrapped in a JSONP callback.
+ * Safe to run manually from the Apps Script editor (no `e`).
+ */
+function doGet(e) {
+  var sheet = getSheet_();
+  var values = sheet.getDataRange().getValues();
+
+  var callbackName = "handleData";
+  if (e && e.parameter && e.parameter.callback) {
+    callbackName = e.parameter.callback;
+  }
+
+  var records = [];
+  if (values.length > 1) {
+    var headers = values[0].map(function (h) {
+      return String(h).trim().toLowerCase();
+    });
+
+    for (var i = 1; i < values.length; i++) {
+      var row = values[i];
+      // skip fully blank rows
+      var isBlank = row.every(function (cell) { return cell === "" || cell === null; });
+      if (isBlank) continue;
+
+      var record = {};
+      for (var j = 0; j < headers.length; j++) {
+        var key = headers[j];
+        var value = row[j];
+
+        if (key === "date" && Object.prototype.toString.call(value) === "[object Date]") {
+          value = Utilities.formatDate(value, Session.getScriptTimeZone(), "dd/MM/yyyy");
+        }
+        record[key] = value;
+      }
+      records.push(record);
+    }
+  }
+
+  var jsonString = JSON.stringify(records);
+  var output = callbackName + "(" + jsonString + ");";
+
+  return ContentService
+    .createTextOutput(output)
+    .setMimeType(ContentService.MimeType.JAVASCRIPT);
+}
+
+/**
+ * POST handler — appends a new expense row, or deletes one when
+ * e.parameter.action === "delete".
+ */
+function doPost(e) {
+  var sheet = getSheet_();
+  var params = (e && e.parameter) ? e.parameter : {};
+
+  if (params.action === "delete") {
+    var index = parseInt(params.index, 10);
+    if (!isNaN(index)) {
+      var rowToDelete = index + 2; // +1 for header row, +1 for 1-based index
+      if (rowToDelete >= 2 && rowToDelete <= sheet.getLastRow()) {
+        sheet.deleteRow(rowToDelete);
+      }
+    }
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: "deleted", index: index }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  sheet.appendRow([
+    params.date || "",
+    params.category || "",
+    params.description || "",
+    params.amount || ""
+  ]);
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ status: "added" }))
+    .setMimeType(ContentService.MimeType.JSON);
+}"; // <-- replace with your Apps Script Web App URL
 
 const BASE_CATEGORIES = [
   "Foundation & Structure",
