@@ -67,7 +67,6 @@
             <option value="NEW_CATEGORY">➕ Add Custom Category...</option>
         </select>
         
-        <!-- Optional Rate Calculator Section -->
         <div class="calc-group">
             <label>📐 Optional Unit/Rate Calculator (Qty × Rate = Total Amount)</label>
             <input type="number" id="qty" placeholder="Quantity / Pieces (Optional)" step="any" oninput="calculateTotal()">
@@ -101,8 +100,10 @@
     <div class="by-line">CREATED BY AHMAD</div>
 </div>
 
+<iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+
 <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzSytyYT-JH07VEjqw4rlPs5iR6Mf5Aw-OQ1IAGEa45a7FpCRVKVpGt2KERIubJzosl/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbziPhATcbMdyfi2xbWCVmGm032Lm2HQ-iT3-CMW7jetzKCLZtcdud9WOveoim6hwbac/exec";
 
     let rawExpenses = [];
 
@@ -167,26 +168,6 @@
         return { qty: '-', rate: '-' };
     }
 
-    let hoveredSelect = null;
-    document.querySelectorAll('.shortcut-select').forEach(selectEl => {
-        selectEl.addEventListener('mouseenter', () => { hoveredSelect = selectEl; });
-        selectEl.addEventListener('mouseleave', () => { hoveredSelect = null; });
-    });
-
-    window.addEventListener('keydown', (e) => {
-        if (hoveredSelect && e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
-            const pressedKey = e.key.toLowerCase();
-            for (let i = 0; i < hoveredSelect.options.length; i++) {
-                const optText = hoveredSelect.options[i].text.trim().toLowerCase();
-                if (optText.startsWith(pressedKey)) {
-                    hoveredSelect.selectedIndex = i;
-                    hoveredSelect.dispatchEvent(new Event('change'));
-                    break;
-                }
-            }
-        }
-    });
-
     function calculateTotal() {
         const qty = parseFloat(document.getElementById('qty').value) || 0;
         const rate = parseFloat(document.getElementById('rate').value) || 0;
@@ -211,19 +192,22 @@
         }
     }
 
-    async function loadExpenses() {
-        const statusEl = document.getElementById('status');
-        statusEl.innerText = "Syncing with Google Sheet...";
+    function loadExpenses() {
+        document.getElementById('status').innerText = "Syncing with Google Sheet...";
+        
+        const oldScript = document.getElementById('jsonpScript');
+        if (oldScript) oldScript.remove();
 
-        try {
-            const res = await fetch(SCRIPT_URL);
-            rawExpenses = await res.json();
-            updateTable();
-            statusEl.innerText = "";
-        } catch (err) {
-            statusEl.innerText = "⚠️ Failed to load data. Ensure Google Apps Script permissions are set to 'Anyone'.";
-            statusEl.style.color = "#e74c3c";
-        }
+        const script = document.createElement('script');
+        script.id = 'jsonpScript';
+        script.src = `${SCRIPT_URL}?callback=handleData&_=${new Date().getTime()}`;
+        document.body.appendChild(script);
+    }
+
+    function handleData(data) {
+        rawExpenses = data;
+        updateTable();
+        document.getElementById('status').innerText = "";
     }
 
     function updateTable() {
@@ -254,7 +238,7 @@
         document.getElementById('totalEntries').innerText = rawExpenses.length;
     }
 
-    document.getElementById('expenseForm').addEventListener('submit', async function(e) {
+    document.getElementById('expenseForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const submitBtn = document.getElementById('submitBtn');
         submitBtn.disabled = true;
@@ -262,56 +246,68 @@
 
         const qtyVal = document.getElementById('qty').value;
         const rateVal = document.getElementById('rate').value;
-        let autoDesc = "";
+        let autoDesc = (qtyVal && rateVal) ? `${qtyVal} pcs @ Rs ${rateVal}/pc` : "";
 
-        if (qtyVal && rateVal) {
-            autoDesc = `${qtyVal} pcs @ Rs ${rateVal}/pc`;
-        }
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = SCRIPT_URL;
+        form.target = 'hidden_iframe';
 
-        const newExpense = {
+        const fields = {
             date: document.getElementById('date').value,
             category: document.getElementById('category').value,
             description: autoDesc,
             amount: document.getElementById('amount').value
         };
 
-        try {
-            await fetch(SCRIPT_URL, {
-                method: "POST",
-                mode: "no-cors",
-                headers: { "Content-Type": "text/plain" },
-                body: JSON.stringify(newExpense)
-            });
+        for (const key in fields) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = fields[key];
+            form.appendChild(input);
+        }
 
-            document.getElementById('qty').value = '';
-            document.getElementById('rate').value = '';
-            document.getElementById('amount').value = '';
-            
-            setTimeout(loadExpenses, 1500);
-        } catch (error) {
-            alert("Failed to save expense.");
-        } finally {
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+
+        document.getElementById('qty').value = '';
+        document.getElementById('rate').value = '';
+        document.getElementById('amount').value = '';
+
+        setTimeout(() => {
             submitBtn.disabled = false;
             submitBtn.innerText = "Add Expense";
+            loadExpenses();
             focusDateInput();
-        }
+        }, 2000);
     });
 
-    async function deleteExpense(index) {
+    function deleteExpense(index) {
         if (!confirm("Are you sure you want to delete this item?")) return;
         
         document.getElementById('status').innerText = "Deleting...";
-        try {
-            await fetch(SCRIPT_URL, {
-                method: "POST",
-                mode: "no-cors",
-                headers: { "Content-Type": "text/plain" },
-                body: JSON.stringify({ action: "delete", index: index })
-            });
-            setTimeout(loadExpenses, 1500);
-        } catch (error) {
-            alert("Failed to delete expense.");
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = SCRIPT_URL;
+        form.target = 'hidden_iframe';
+
+        const fields = { action: "delete", index: index };
+        for (const key in fields) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = fields[key];
+            form.appendChild(input);
         }
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+
+        setTimeout(loadExpenses, 2000);
     }
 
     function exportToCSV() {
