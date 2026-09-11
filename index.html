@@ -86,7 +86,9 @@
 
     <!-- ADD EXPENSE FORM -->
     <form id="expenseForm">
-        <input type="date" id="date" required>
+        <!-- Date Input initialized to DD/MM/YYYY -->
+        <input type="text" id="date" placeholder="DD/MM/YYYY" maxlength="10" required onclick="selectDaySegment(this)">
+        
         <select id="category" class="shortcut-select" onchange="handleCategoryChange(this)" required>
             <option value="">Select Category</option>
             <option value="Foundation & Structure">Foundation & Structure</option>
@@ -99,18 +101,18 @@
             <option value="NEW_CATEGORY">➕ Add Custom Category...</option>
         </select>
         
-        <!-- Rate Calculator Section -->
+        <!-- Optional Rate Calculator Section -->
         <div class="calc-group">
             <label>📐 Optional Unit/Rate Calculator (Qty × Rate = Total Amount)</label>
-            <input type="number" id="qty" placeholder="Quantity / Pieces" step="any" oninput="calculateTotal()">
-            <input type="number" id="rate" placeholder="Rate Per Piece (Rs)" step="any" oninput="calculateTotal()">
+            <input type="number" id="qty" placeholder="Quantity / Pieces (Optional)" step="any" oninput="calculateTotal()">
+            <input type="number" id="rate" placeholder="Rate Per Piece in Rs (Optional)" step="any" oninput="calculateTotal()">
         </div>
 
         <input type="number" id="amount" class="full-width" placeholder="Total Amount (Rs)" step="0.01" required>
         <button type="submit" id="submitBtn" class="full-width">Add Expense</button>
     </form>
 
-    <!-- FILTER & VERIFICATION SECTION -->
+    <!-- FILTER SECTION -->
     <div class="filter-section">
         <h3>🔍 Filter Data by Category & Date Range</h3>
         <div class="filter-grid">
@@ -128,12 +130,12 @@
                 </select>
             </div>
             <div>
-                <label>From Date</label>
-                <input type="date" id="filterFromDate" onchange="applyFilters()">
+                <label>From Date (DD/MM/YYYY)</label>
+                <input type="text" id="filterFromDate" placeholder="DD/MM/YYYY" maxlength="10" oninput="applyFilters()">
             </div>
             <div>
-                <label>To Date</label>
-                <input type="date" id="filterToDate" onchange="applyFilters()">
+                <label>To Date (DD/MM/YYYY)</label>
+                <input type="text" id="filterToDate" placeholder="DD/MM/YYYY" maxlength="10" oninput="applyFilters()">
             </div>
             <div>
                 <button class="reset-btn" onclick="resetFilters()">Reset Filters</button>
@@ -143,7 +145,7 @@
 
     <!-- CATEGORY SUMMARY BREAKDOWN -->
     <div class="summary-box">
-        <h3>📊 Category Breakdown (Verification)</h3>
+        <h3>📊 Category Breakdown</h3>
         <div id="categorySummary" class="summary-list"></div>
     </div>
 
@@ -178,25 +180,68 @@
     let rawExpenses = [];
     let filteredExpenses = [];
 
-    // Set today's date into the segmented field on load
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    document.getElementById('date').value = `${yyyy}-${mm}-${dd}`;
+    // Utility: Format Date Object to DD/MM/YYYY
+    function getTodayDMY() {
+        const today = new Date();
+        const dd = String(today.getDate()).padStart(2, '0');
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const yyyy = today.getFullYear();
+        return `${dd}/${mm}/${yyyy}`;
+    }
 
-    // Format YYYY-MM-DD or ISO string to DD/MM/YYYY for table and CSV view
+    // Initialize Form Date to Current Date (DD/MM/YYYY)
+    const dateInput = document.getElementById('date');
+    dateInput.value = getTodayDMY();
+
+    // Select the "DD" part when user clicks on date input without erasing the field
+    function selectDaySegment(inputEl) {
+        if (inputEl.value.length === 10) {
+            inputEl.setSelectionRange(0, 2); // Selects 'DD' segment
+        }
+    }
+
+    // Auto-formatting and segment jump handler for DD/MM/YYYY fields
+    function setupDateAutoFormat(inputId) {
+        const el = document.getElementById(inputId);
+        el.addEventListener('keydown', function(e) {
+            // Auto-advance cursor to MM when DD is typed or slash is hit
+            if (e.key === '/' || e.key === 'ArrowRight') {
+                const cursorPos = el.selectionStart;
+                if (cursorPos <= 2) {
+                    e.preventDefault();
+                    el.setSelectionRange(3, 5); // Select MM
+                } else if (cursorPos <= 5) {
+                    e.preventDefault();
+                    el.setSelectionRange(6, 10); // Select YYYY
+                }
+            }
+        });
+    }
+
+    setupDateAutoFormat('date');
+
+    // Convert string date (YYYY-MM-DD or DD/MM/YYYY) to DD/MM/YYYY standard string
     function formatDateDMY(rawDateStr) {
         if (!rawDateStr) return '';
         const cleanStr = String(rawDateStr).substring(0, 10);
-        const parts = cleanStr.split('-');
-        if (parts.length === 3) {
-            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        if (cleanStr.includes('-')) {
+            const parts = cleanStr.split('-');
+            if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
         }
-        return rawDateStr;
+        return cleanStr;
     }
 
-    // Category shortcut keyboard handler
+    // Convert DD/MM/YYYY string to Comparable YYYYMMDD integer for filtering
+    function dmyToSortable(dmyStr) {
+        if (!dmyStr) return '';
+        const parts = dmyStr.split('/');
+        if (parts.length === 3) {
+            return `${parts[2].padStart(4,'0')}${parts[1].padStart(2,'0')}${parts[0].padStart(2,'0')}`;
+        }
+        return dmyStr.replace(/-/g, '');
+    }
+
+    // Category shortcut handler
     let hoveredSelect = null;
     document.querySelectorAll('.shortcut-select').forEach(selectEl => {
         selectEl.addEventListener('mouseenter', () => { hoveredSelect = selectEl; });
@@ -217,6 +262,7 @@
         }
     });
 
+    // Optional Rate Calculation
     function calculateTotal() {
         const qty = parseFloat(document.getElementById('qty').value) || 0;
         const rate = parseFloat(document.getElementById('rate').value) || 0;
@@ -273,14 +319,19 @@
 
     function applyFilters() {
         const category = document.getElementById('filterCategory').value;
-        const fromDate = document.getElementById('filterFromDate').value;
-        const toDate = document.getElementById('filterToDate').value;
+        const fromDateRaw = document.getElementById('filterFromDate').value;
+        const toDateRaw = document.getElementById('filterToDate').value;
+
+        const fromSortable = dmyToSortable(fromDateRaw);
+        const toSortable = dmyToSortable(toDateRaw);
 
         filteredExpenses = rawExpenses.filter(item => {
-            const itemDate = item.date ? String(item.date).substring(0, 10) : '';
+            const itemDMY = formatDateDMY(item.date);
+            const itemSortable = dmyToSortable(itemDMY);
+
             const categoryMatch = (category === 'ALL' || item.category === category);
-            const fromMatch = !fromDate || (itemDate >= fromDate);
-            const toMatch = !toDate || (itemDate <= toDate);
+            const fromMatch = !fromSortable || (itemSortable >= fromSortable);
+            const toMatch = !toSortable || (itemSortable <= toSortable);
 
             return categoryMatch && fromMatch && toMatch;
         });
