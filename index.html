@@ -208,7 +208,7 @@
 </div>
 
 <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxw6IcaM57c1gYZg2yu-oMnpf6FvCVSF0gruclDCxxizJdQskxVd4Vi8RkF-44ikGns/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxw6IcaM57c1gYZg2yu-oMnpf6FvCVSF0gruclDcxxizJdQskxVd4Vi8RkF-44ikGns/exec";
 
     let rawExpenses = [];
     let filteredExpenses = [];
@@ -336,32 +336,21 @@
         }
     }
 
-    function loadExpenses() {
+    async function loadExpenses() {
         const statusEl = document.getElementById('status');
         statusEl.className = "loading";
         statusEl.innerText = "Syncing with Google Sheet...";
 
-        const oldScript = document.getElementById('jsonp-script');
-        if (oldScript) oldScript.remove();
-
-        const script = document.createElement('script');
-        script.id = 'jsonp-script';
-        script.src = `${SCRIPT_URL}?callback=handleData&_=${new Date().getTime()}`;
-        
-        script.onerror = function() {
+        try {
+            const res = await fetch(SCRIPT_URL);
+            const data = await res.json();
+            rawExpenses = data || [];
+            applyFilters();
+            statusEl.innerText = "";
+        } catch (err) {
             statusEl.className = "loading error-msg";
             statusEl.innerText = "⚠️ Failed to load data. Ensure Google Apps Script permissions are set to 'Anyone'.";
-        };
-
-        document.body.appendChild(script);
-    }
-
-    function handleData(data) {
-        rawExpenses = data || [];
-        applyFilters();
-        const statusEl = document.getElementById('status');
-        statusEl.className = "loading";
-        statusEl.innerText = "";
+        }
     }
 
     function applyFilters() {
