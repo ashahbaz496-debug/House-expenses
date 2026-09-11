@@ -99,8 +99,6 @@
             <option value="NEW_CATEGORY">➕ Add Custom Category...</option>
         </select>
         
-        <input type="text" id="description" class="full-width" placeholder="Description (e.g. Bricks or Cement Bags)" required>
-        
         <!-- Rate Calculator Section -->
         <div class="calc-group">
             <label>📐 Optional Unit/Rate Calculator (Qty × Rate = Total Amount)</label>
@@ -162,9 +160,8 @@
     <table>
         <thead>
             <tr>
-                <th>Date</th>
+                <th>Date (DD/MM/YYYY)</th>
                 <th>Category</th>
-                <th>Description</th>
                 <th>Amount</th>
                 <th class="action-col">Action</th>
             </tr>
@@ -181,6 +178,17 @@
     let rawExpenses = [];
     let filteredExpenses = [];
     document.getElementById('date').valueAsDate = new Date();
+
+    // Format date as DD/MM/YYYY
+    function formatDateDMY(rawDateStr) {
+        if (!rawDateStr) return '';
+        const cleanStr = String(rawDateStr).substring(0, 10);
+        const parts = cleanStr.split('-');
+        if (parts.length === 3) {
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+        return rawDateStr;
+    }
 
     // Hover Keyboard Shortcut Handler
     let hoveredSelect = null;
@@ -217,14 +225,12 @@
             if (customCat && customCat.trim() !== "") {
                 const newName = customCat.trim();
                 
-                // Add to main form dropdown
                 const opt = document.createElement("option");
                 opt.value = newName;
                 opt.text = newName;
                 opt.selected = true;
                 selectObj.add(opt, selectObj.options[selectObj.options.length - 1]);
 
-                // Add to filter dropdown
                 const filterSelect = document.getElementById('filterCategory');
                 const filterOpt = document.createElement("option");
                 filterOpt.value = newName;
@@ -298,11 +304,12 @@
             }
             categoryTotals[item.category] += amt;
 
+            const formattedDate = formatDateDMY(item.date);
+
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td>${item.date ? String(item.date).substring(0, 10) : ''}</td>
+                <td>${formattedDate}</td>
                 <td>${item.category}</td>
-                <td>${item.description}</td>
                 <td>Rs ${amt.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                 <td class="action-col"><button class="delete-btn" onclick="deleteExpense(${index})">Delete</button></td>
             `;
@@ -334,16 +341,16 @@
 
         const qtyVal = document.getElementById('qty').value;
         const rateVal = document.getElementById('rate').value;
-        let desc = document.getElementById('description').value;
+        let autoDesc = "";
 
         if (qtyVal && rateVal) {
-            desc += ` (${qtyVal} pcs @ Rs ${rateVal}/pc)`;
+            autoDesc = `${qtyVal} pcs @ Rs ${rateVal}/pc`;
         }
 
         const newExpense = {
             date: document.getElementById('date').value,
             category: document.getElementById('category').value,
-            description: desc,
+            description: autoDesc,
             amount: document.getElementById('amount').value
         };
 
@@ -355,7 +362,6 @@
                 body: JSON.stringify(newExpense)
             });
 
-            document.getElementById('description').value = '';
             document.getElementById('qty').value = '';
             document.getElementById('rate').value = '';
             document.getElementById('amount').value = '';
@@ -392,10 +398,10 @@
             return;
         }
 
-        let csvContent = "data:text/csv;charset=utf-8,Date,Category,Description,Amount\n";
+        let csvContent = "data:text/csv;charset=utf-8,Date (DD/MM/YYYY),Category,Amount\n";
         filteredExpenses.forEach(e => {
-            const cleanDate = e.date ? String(e.date).substring(0, 10) : '';
-            csvContent += `"${cleanDate}","${e.category}","${e.description}","${e.amount}"\n`;
+            const formattedDate = formatDateDMY(e.date);
+            csvContent += `"${formattedDate}","${e.category}","${e.amount}"\n`;
         });
 
         const encodedUri = encodeURI(csvContent);
