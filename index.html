@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Home Construction Expense Tracker</title>
+    <!-- jsPDF Libraries for PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: Arial, sans-serif; }
         body { background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
@@ -23,14 +26,22 @@
         .calc-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; grid-column: span 2; background: #eaeaea; padding: 10px; border-radius: 5px; }
         .calc-group label { font-size: 12px; font-weight: bold; color: #555; grid-column: span 2; }
 
+        .actions-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: #f1f1f1; padding: 10px; border-radius: 5px; flex-wrap: wrap; gap: 10px; }
+        .pdf-group { display: flex; gap: 8px; align-items: center; }
+        .pdf-group select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        
+        .btn { border: none; padding: 8px 14px; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; }
+        .export-btn { background: #27ae60; }
+        .export-btn:hover { background: #219150; }
+        .pdf-btn { background: #e67e22; }
+        .pdf-btn:hover { background: #d35400; }
+
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background: #34495e; color: white; }
         tr:nth-child(even) { background-color: #f9f9f9; }
         .delete-btn { background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
         .loading { text-align: center; font-style: italic; color: #777; margin: 15px 0; }
-        .export-btn { background: #27ae60; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-bottom: 10px; float: right; }
-        .export-btn:hover { background: #219150; }
 
         .by-line { text-align: center; margin-top: 20px; font-weight: bold; color: #555; border-top: 1px solid #ddd; padding-top: 15px; }
     </style>
@@ -77,11 +88,26 @@
         <button type="submit" id="submitBtn" class="full-width">Add Expense</button>
     </form>
 
-    <div style="overflow: hidden;">
-        <button class="export-btn" onclick="exportToCSV()">📥 Export to CSV</button>
+    <!-- EXPORT & PDF TOOLBAR -->
+    <div class="actions-bar">
+        <button class="btn export-btn" onclick="exportToCSV()">📥 Export CSV</button>
+        
+        <div class="pdf-group">
+            <select id="pdfCategoryFilter">
+                <option value="ALL">All Categories</option>
+                <option value="Foundation & Structure">Foundation & Structure</option>
+                <option value="Cement & Bricks">Cement & Bricks</option>
+                <option value="Labor">Labor</option>
+                <option value="Plumbing & Electrical">Plumbing & Electrical</option>
+                <option value="Finishing & Paint">Finishing & Paint</option>
+                <option value="Permits & Legal">Permits & Legal</option>
+                <option value="Other">Other</option>
+            </select>
+            <button class="btn pdf-btn" onclick="generatePDF()">📄 Generate Category PDF</button>
+        </div>
     </div>
 
-    <div id="status" class="loading">Loading expenses from Google Sheet...</div>
+    <div id="status" class="loading">Syncing with Google Sheet...</div>
 
     <table>
         <thead>
@@ -181,11 +207,19 @@
             const customCat = prompt("Enter new category name:");
             if (customCat && customCat.trim() !== "") {
                 const newName = customCat.trim();
+                
+                // Add option to entry dropdown
                 const opt = document.createElement("option");
                 opt.value = newName;
                 opt.text = newName;
                 opt.selected = true;
                 selectObj.add(opt, selectObj.options[selectObj.options.length - 1]);
+
+                // Add option to PDF Filter dropdown as well
+                const pdfOpt = document.createElement("option");
+                pdfOpt.value = newName;
+                pdfOpt.text = newName;
+                document.getElementById('pdfCategoryFilter').add(pdfOpt);
             } else {
                 selectObj.value = "";
             }
@@ -330,6 +364,78 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    }
+
+    // PDF GENERATOR BY CATEGORY FUNCTION
+    function generatePDF() {
+        if (rawExpenses.length === 0) {
+            alert("No data available to generate PDF!");
+            return;
+        }
+
+        const selectedCategory = document.getElementById('pdfCategoryFilter').value;
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // Filter items
+        let filteredExpenses = rawExpenses;
+        if (selectedCategory !== "ALL") {
+            filteredExpenses = rawExpenses.filter(item => item.category === selectedCategory);
+        }
+
+        if (filteredExpenses.length === 0) {
+            alert(`No expenses found for category: ${selectedCategory}`);
+            return;
+        }
+
+        // Header Title
+        doc.setFontSize(18);
+        doc.text("Home Construction Expense Report", 14, 20);
+        
+        doc.setFontSize(11);
+        doc.setTextColor(100);
+        doc.text(`Category: ${selectedCategory}`, 14, 28);
+        doc.text(`Generated On: ${getTodayDMY()}`, 14, 34);
+
+        // Build PDF Table Rows
+        let tableRows = [];
+        let categoryTotal = 0;
+
+        filteredExpenses.forEach(item => {
+            const amt = parseFloat(item.amount || 0);
+            categoryTotal += amt;
+            const details = parseDetails(item.description);
+            
+            tableRows.push([
+                formatDateDMY(item.date),
+                item.category,
+                details.qty,
+                details.rate !== '-' ? `Rs ${parseFloat(details.rate).toFixed(2)}` : '-',
+                `Rs ${amt.toFixed(2)}`
+            ]);
+        });
+
+        // Add Summary Row
+        tableRows.push([
+            { content: 'Total', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } },
+            { content: `Rs ${categoryTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}`, styles: { fontStyle: 'bold' } }
+        ]);
+
+        // Draw Table
+        doc.autoTable({
+            startY: 40,
+            head: [['Date', 'Category', 'Qty', 'Rate / Piece', 'Total Amount']],
+            body: tableRows,
+            theme: 'striped',
+            headStyles: { fillColor: [52, 73, 94] }
+        });
+
+        // Save PDF
+        const fileName = selectedCategory === "ALL" 
+            ? "Construction_Expenses_All.pdf" 
+            : `Construction_Expenses_${selectedCategory.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+
+        doc.save(fileName);
     }
 
     loadExpenses();
