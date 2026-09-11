@@ -193,7 +193,14 @@
     const dateInput = document.getElementById('date');
     dateInput.value = getTodayDMY();
 
-    // Select the "DD" part when user clicks on date input without erasing the field
+    // Focus and select the "DD" segment without erasing the field
+    function focusDateInput() {
+        dateInput.focus();
+        if (dateInput.value.length === 10) {
+            dateInput.setSelectionRange(0, 2); // Selects 'DD' segment
+        }
+    }
+
     function selectDaySegment(inputEl) {
         if (inputEl.value.length === 10) {
             inputEl.setSelectionRange(0, 2); // Selects 'DD' segment
@@ -204,7 +211,6 @@
     function setupDateAutoFormat(inputId) {
         const el = document.getElementById(inputId);
         el.addEventListener('keydown', function(e) {
-            // Auto-advance cursor to MM when DD is typed or slash is hit
             if (e.key === '/' || e.key === 'ArrowRight') {
                 const cursorPos = el.selectionStart;
                 if (cursorPos <= 2) {
@@ -429,6 +435,9 @@
         } finally {
             submitBtn.disabled = false;
             submitBtn.innerText = "Add Expense";
+            
+            // Redirect focus back to the date input field for fast continuous entry
+            focusDateInput();
         }
     });
 
