@@ -853,7 +853,31 @@ function formatRs(amount){
 function renderSummary(){
   const totalSpent = expenses.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
   const totalCredited = credits.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
-  const balance = totalCredited - totalSpent;
+
+  // Balance only exists once money has actually been credited in. Until then
+  // it stays at zero — expenses logged before any credit don't drag it negative.
+  // Once credits exist, the balance is what was credited minus only the
+  // expenses dated on/after the earliest credit (expenses that pre-date any
+  // money coming in aren't counted against this balance).
+  let balance = 0;
+  if (credits.length > 0){
+    let earliestCreditDate = null;
+    credits.forEach(row => {
+      const dt = parseDMY(row.date);
+      if (dt && (!earliestCreditDate || dt < earliestCreditDate)) earliestCreditDate = dt;
+    });
+
+    if (earliestCreditDate){
+      const relevantExpenses = expenses.reduce((sum, row) => {
+        const dt = parseDMY(row.date);
+        return (dt && dt >= earliestCreditDate) ? sum + (parseFloat(row.amount) || 0) : sum;
+      }, 0);
+      balance = totalCredited - relevantExpenses;
+    } else {
+      // credit dates couldn't be parsed — fall back to a simple net total
+      balance = totalCredited - totalSpent;
+    }
+  }
 
   document.getElementById("totalSpent").textContent = formatRs(totalSpent);
   document.getElementById("totalCredited").textContent = formatRs(totalCredited);
