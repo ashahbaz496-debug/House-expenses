@@ -267,6 +267,12 @@
     padding:26px 10px;
   }
 
+  .action-cell{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+
   .del-btn{
     background:none;
     border:1px solid var(--rust);
@@ -277,6 +283,17 @@
   }
   .del-btn:hover{ background:var(--rust); color:#fff; }
   .del-btn:disabled{ opacity:0.5; cursor:not-allowed; }
+
+  .edit-btn{
+    background:none;
+    border:1px solid var(--blueprint);
+    color:var(--blueprint);
+    font-size:12px;
+    padding:5px 10px;
+    font-weight:700;
+  }
+  .edit-btn:hover{ background:var(--blueprint); color:#fff; }
+  .edit-btn:disabled{ opacity:0.5; cursor:not-allowed; }
 
   footer{
     text-align:center;
@@ -328,6 +345,11 @@
         </div>
       </div>
 
+      <div class="amount-row">
+        <label for="subcategoryInput">Sub-category / Notes (optional)</label>
+        <input type="text" id="subcategoryInput" placeholder="e.g. Roof waterproofing, Kitchen tiles, Site labor - Day shift">
+      </div>
+
       <div class="calc-box">
         <p class="calc-title">📐 Optional Unit/Rate Calculator (Qty × Rate = Total Amount)</p>
         <div class="calc-grid">
@@ -348,6 +370,7 @@
       </div>
 
       <button type="submit" class="btn-primary" id="submitBtn">Add Expense</button>
+      <button type="button" class="btn-outline" id="cancelEditBtn" style="display:none; width:100%; margin-top:10px;">Cancel Edit</button>
     </form>
   </section>
 
@@ -371,6 +394,7 @@
         <tr>
           <th>Date</th>
           <th>Category</th>
+          <th>Sub-category</th>
           <th class="num">Quantity</th>
           <th class="num">Rate / Piece (Rs)</th>
           <th class="num">Total Amount</th>
@@ -378,7 +402,7 @@
         </tr>
       </thead>
       <tbody id="expenseTableBody">
-        <tr class="empty-row"><td colspan="6">Loading…</td></tr>
+        <tr class="empty-row"><td colspan="7">Loading…</td></tr>
       </tbody>
     </table>
   </section>
@@ -644,7 +668,7 @@ function renderTable(){
   tbody.innerHTML = "";
 
   if (expenses.length === 0){
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="6">No expenses logged yet — add your first entry above.</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">No expenses logged yet — add your first entry above.</td></tr>`;
     return;
   }
 
@@ -654,16 +678,23 @@ function renderTable(){
     tr.innerHTML = `
       <td>${row.date || "-"}</td>
       <td>${row.category || "-"}</td>
+      <td>${row.subcategory || "-"}</td>
       <td class="num">${qty}</td>
       <td class="num">${rate}</td>
       <td class="num">${formatRs(row.amount)}</td>
-      <td><button type="button" class="del-btn" data-index="${index}">Delete</button></td>
+      <td class="action-cell">
+        <button type="button" class="edit-btn" data-index="${index}">Edit</button>
+        <button type="button" class="del-btn" data-index="${index}">Delete</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
 
   tbody.querySelectorAll(".del-btn").forEach(btn => {
     btn.addEventListener("click", () => deleteExpense(parseInt(btn.dataset.index, 10), btn));
+  });
+  tbody.querySelectorAll(".edit-btn").forEach(btn => {
+    btn.addEventListener("click", () => beginEditExpense(parseInt(btn.dataset.index, 10)));
   });
 }
 
@@ -698,8 +729,65 @@ function postToSheet(payload, onDone){
 }
 
 /* ============================================================
-   ADD EXPENSE
+   ADD / EDIT EXPENSE
    ============================================================ */
+let editingIndex = null; // null = adding a new entry, otherwise the index of the row being edited
+
+function focusDateSection(){
+  todaySegments();
+  renderDate();
+  dateInput.focus();
+  selectSegment("d");
+}
+
+function resetFormToAddMode(){
+  editingIndex = null;
+  document.getElementById("subcategoryInput").value = "";
+  qtyInput.value = "";
+  rateInput.value = "";
+  amountInput.value = "";
+  document.getElementById("submitBtn").textContent = "Add Expense";
+  document.getElementById("cancelEditBtn").style.display = "none";
+  focusDateSection();
+}
+
+function beginEditExpense(index){
+  const row = expenses[index];
+  if (!row) return;
+
+  editingIndex = index;
+
+  // populate date segments
+  const parts = String(row.date || "").split("/");
+  if (parts.length === 3){
+    dSeg = parts[0].padStart(2, "0");
+    mSeg = parts[1].padStart(2, "0");
+    ySeg = parts[2].padStart(4, "0");
+    renderDate();
+  }
+
+  if (row.category && allCategories().includes(row.category)){
+    document.getElementById("categorySelect").value = row.category;
+  }
+  document.getElementById("subcategoryInput").value = row.subcategory || "";
+
+  const { qty, rate } = parseDescription(row.description);
+  qtyInput.value = qty !== "-" ? qty : "";
+  rateInput.value = rate !== "-" ? rate : "";
+  amountInput.value = row.amount || "";
+
+  document.getElementById("submitBtn").textContent = "Update Expense";
+  document.getElementById("cancelEditBtn").style.display = "block";
+  document.getElementById("statusLine").textContent = "Editing entry — update the fields and press \u201cUpdate Expense\u201d.";
+
+  document.getElementById("expenseForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+document.getElementById("cancelEditBtn").addEventListener("click", function(){
+  resetFormToAddMode();
+  document.getElementById("statusLine").textContent = "Edit cancelled.";
+});
+
 document.getElementById("expenseForm").addEventListener("submit", function(e){
   e.preventDefault();
 
@@ -726,23 +814,22 @@ document.getElementById("expenseForm").addEventListener("submit", function(e){
   const payload = {
     date: dateInput.value,
     category: categorySelect.value,
+    subcategory: document.getElementById("subcategoryInput").value.trim(),
     description: description,
     amount: amount
   };
 
+  const isEditing = editingIndex !== null;
+  if (isEditing) payload.action = "update";
+  if (isEditing) payload.index = editingIndex;
+
   submitBtn.disabled = true;
   submitBtn.textContent = "Saving...";
-  document.getElementById("statusLine").textContent = "Saving expense…";
+  document.getElementById("statusLine").textContent = isEditing ? "Updating expense…" : "Saving expense…";
 
   postToSheet(payload, function(){
-    // reset form fields, keep category selection convenient
-    todaySegments();
-    renderDate();
-    qtyInput.value = "";
-    rateInput.value = "";
-    amountInput.value = "";
     submitBtn.disabled = false;
-    submitBtn.textContent = "Add Expense";
+    resetFormToAddMode();
     // Apps Script needs a brief moment to commit the row before we re-fetch
     setTimeout(loadExpenses, 900);
   });
@@ -754,8 +841,9 @@ document.getElementById("expenseForm").addEventListener("submit", function(e){
 function deleteExpense(index, btnEl){
   if (!confirm("Delete this expense entry?")) return;
 
-  document.querySelectorAll(".del-btn").forEach(b => b.disabled = true);
+  document.querySelectorAll(".del-btn, .edit-btn").forEach(b => b.disabled = true);
   document.getElementById("statusLine").textContent = "Deleting expense…";
+  if (editingIndex === index) resetFormToAddMode();
 
   postToSheet({ action: "delete", index: index }, function(){
     setTimeout(loadExpenses, 900);
@@ -771,10 +859,10 @@ document.getElementById("exportCsvBtn").addEventListener("click", function(){
     return;
   }
 
-  const header = ["Date", "Category", "Quantity", "Rate Per Piece (Rs)", "Total Amount (Rs)"];
+  const header = ["Date", "Category", "Sub-category", "Quantity", "Rate Per Piece (Rs)", "Total Amount (Rs)"];
   const rows = expenses.map(row => {
     const { qty, rate } = parseDescription(row.description);
-    return [row.date, row.category, qty, rate, (parseFloat(row.amount) || 0).toFixed(2)];
+    return [row.date, row.category, row.subcategory || "", qty, rate, (parseFloat(row.amount) || 0).toFixed(2)];
   });
 
   const csvContent = [header, ...rows]
@@ -822,12 +910,12 @@ document.getElementById("generatePdfBtn").addEventListener("click", function(){
 
   const tableRows = filtered.map(row => {
     const { qty, rate } = parseDescription(row.description);
-    return [row.date, row.category, qty, rate, formatRs(row.amount)];
+    return [row.date, row.category, row.subcategory || "-", qty, rate, formatRs(row.amount)];
   });
 
   doc.autoTable({
     startY: 38,
-    head: [["Date", "Category", "Quantity", "Rate / Piece (Rs)", "Total Amount"]],
+    head: [["Date", "Category", "Sub-category", "Quantity", "Rate / Piece (Rs)", "Total Amount"]],
     body: tableRows,
     headStyles: { fillColor: [22, 50, 79] },
     styles: { fontSize: 10 }
