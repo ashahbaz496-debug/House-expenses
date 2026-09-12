@@ -106,6 +106,8 @@
     margin:0;
     font-variant-numeric:tabular-nums;
   }
+  .tick-value.positive{ color:#8FD19E; }
+  .tick-value.negative{ color:#F0A08C; }
 
   /* ---------- BODY ---------- */
   main{
@@ -304,8 +306,33 @@
     border-top:1px solid var(--line);
   }
 
+  .mini-stat-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:12px;
+    margin-bottom:16px;
+  }
+  .mini-stat{
+    border:1px solid var(--line-strong);
+    background:#fff;
+    padding:12px 14px;
+  }
+  .mini-stat-label{
+    font-size:11.5px;
+    color:var(--ink-soft);
+    margin:0 0 4px;
+  }
+  .mini-stat-value{
+    font-size:18px;
+    font-weight:700;
+    margin:0;
+    font-variant-numeric:tabular-nums;
+  }
+  .mini-stat-value.positive{ color:var(--green-ok); }
+  .mini-stat-value.negative{ color:var(--rust); }
+
   @media (max-width:560px){
-    .field-grid, .calc-grid, .summary-grid{ grid-template-columns:1fr; }
+    .field-grid, .calc-grid, .summary-grid, .mini-stat-grid{ grid-template-columns:1fr; }
     .toolbar{ flex-direction:column; align-items:stretch; }
   }
 </style>
@@ -318,8 +345,16 @@
     <h1 class="title">🏠 Home Construction Expenses</h1>
     <div class="summary-grid">
       <div class="tick-panel">
+        <p class="tick-label">Total Credited</p>
+        <p class="tick-value" id="totalCredited">Rs 0.00</p>
+      </div>
+      <div class="tick-panel">
         <p class="tick-label">Total Spent</p>
         <p class="tick-value" id="totalSpent">Rs 0.00</p>
+      </div>
+      <div class="tick-panel">
+        <p class="tick-label">Balance Remaining</p>
+        <p class="tick-value" id="balanceRemaining">Rs 0.00</p>
       </div>
       <div class="tick-panel">
         <p class="tick-label">Total Entries</p>
@@ -375,15 +410,112 @@
   </section>
 
   <section class="panel">
+    <h2>💰 Add Account Credit</h2>
+    <p class="calc-title" style="margin:-8px 0 16px; font-weight:400; color:var(--ink-soft);">
+      Log money credited into your bank account (salary, loan, transfer-in, etc.) so we can track what's left after expenses.
+    </p>
+    <form id="creditForm">
+      <div class="field-grid">
+        <div>
+          <label for="creditDateInput">Date</label>
+          <input type="text" id="creditDateInput" maxlength="10" autocomplete="off" inputmode="numeric">
+        </div>
+        <div>
+          <label for="creditAmountInput">Amount Credited (Rs)</label>
+          <input type="number" id="creditAmountInput" min="0" step="any" required>
+        </div>
+      </div>
+      <div class="amount-row">
+        <label for="creditSourceInput">Source / Note (optional)</label>
+        <input type="text" id="creditSourceInput" placeholder="e.g. Salary, Bank transfer, Loan from uncle">
+      </div>
+      <button type="submit" class="btn-primary" id="creditSubmitBtn">Add Credit</button>
+      <button type="button" class="btn-outline" id="creditCancelEditBtn" style="display:none; width:100%; margin-top:10px;">Cancel Edit</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Account Credit Log</h2>
+    <p class="status-line" id="creditStatusLine">Loading credits…</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Source / Note</th>
+          <th class="num">Amount Credited</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="creditsTableBody">
+        <tr class="empty-row"><td colspan="4">Loading…</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
     <h2>Export &amp; Reports</h2>
     <div class="toolbar">
       <button type="button" class="btn-outline" id="exportCsvBtn">📥 Export CSV</button>
+      <button type="button" class="btn-outline" id="exportCreditsCsvBtn">📥 Export Credits CSV</button>
       <div class="grow">
         <label for="pdfCategorySelect">Report Category</label>
         <select id="pdfCategorySelect"></select>
       </div>
       <button type="button" class="btn-outline" id="generatePdfBtn">📄 Generate Category PDF</button>
     </div>
+  </section>
+
+  <section class="panel">
+    <h2>📊 Date Range Statement</h2>
+    <p class="calc-title" style="margin:-8px 0 16px; font-weight:400; color:var(--ink-soft);">
+      See everything credited in and taken out between two dates, sorted chronologically, with the purpose of each entry.
+    </p>
+    <div class="field-grid">
+      <div>
+        <label for="statementFromInput">From Date</label>
+        <input type="text" id="statementFromInput" maxlength="10" autocomplete="off" inputmode="numeric">
+      </div>
+      <div>
+        <label for="statementToInput">To Date</label>
+        <input type="text" id="statementToInput" maxlength="10" autocomplete="off" inputmode="numeric">
+      </div>
+    </div>
+    <div class="toolbar" style="margin-bottom:16px;">
+      <button type="button" class="btn-outline" id="viewStatementBtn">🔍 View Statement</button>
+      <button type="button" class="btn-outline" id="exportStatementCsvBtn">📥 Export Statement CSV</button>
+      <button type="button" class="btn-outline" id="exportStatementPdfBtn">📄 Export Statement PDF</button>
+    </div>
+    <p class="status-line" id="statementStatusLine"></p>
+
+    <div class="mini-stat-grid" id="statementSummaryGrid" style="display:none;">
+      <div class="mini-stat">
+        <p class="mini-stat-label">Total In</p>
+        <p class="mini-stat-value" id="statementTotalIn">Rs 0.00</p>
+      </div>
+      <div class="mini-stat">
+        <p class="mini-stat-label">Total Out</p>
+        <p class="mini-stat-value" id="statementTotalOut">Rs 0.00</p>
+      </div>
+      <div class="mini-stat">
+        <p class="mini-stat-label">Net</p>
+        <p class="mini-stat-value" id="statementNet">Rs 0.00</p>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Type</th>
+          <th>Purpose / Category</th>
+          <th class="num">Money In</th>
+          <th class="num">Money Out</th>
+        </tr>
+      </thead>
+      <tbody id="statementTableBody">
+        <tr class="empty-row"><td colspan="5">Choose a date range above and press "View Statement".</td></tr>
+      </tbody>
+    </table>
   </section>
 
   <section class="panel">
@@ -431,7 +563,8 @@ const BASE_CATEGORIES = [
 ];
 
 let customCategories = [];
-let expenses = []; // cache of loaded rows, each: {date, category, description, amount}
+let expenses = []; // cache of loaded rows, each: {date, category, subcategory, description, amount}
+let credits = []; // cache of loaded rows, each: {date, source, amount}
 
 /* ============================================================
    CATEGORY DROPDOWNS
@@ -491,103 +624,136 @@ document.getElementById("categorySelect").addEventListener("change", function(){
 });
 
 /* ============================================================
-   SEGMENTED DATE INPUT (DD/MM/YYYY)
+   SEGMENTED DATE INPUT (DD/MM/YYYY) — reusable factory
    ============================================================ */
+function makeSegmentedDateInput(inputEl){
+  let d = "", m = "", y = "";
+  let activeSeg = "d", dPos = 0, mPos = 0, yPos = 0;
+
+  function today(){
+    const now = new Date();
+    d = String(now.getDate()).padStart(2, "0");
+    m = String(now.getMonth() + 1).padStart(2, "0");
+    y = String(now.getFullYear());
+  }
+
+  function render(){
+    inputEl.value = `${d}/${m}/${y}`;
+  }
+
+  function selectSegment(name){
+    let start, end;
+    if (name === "d"){ start = 0; end = 2; }
+    else if (name === "m"){ start = 3; end = 5; }
+    else { start = 6; end = 10; }
+    inputEl.setSelectionRange(start, end);
+  }
+
+  function segmentFromCaret(pos){
+    if (pos <= 2) return "d";
+    if (pos <= 5) return "m";
+    return "y";
+  }
+
+  today();
+  render();
+
+  inputEl.addEventListener("focus", () => selectSegment("d"));
+  inputEl.addEventListener("click", () => {
+    const seg = segmentFromCaret(inputEl.selectionStart);
+    selectSegment(seg);
+  });
+
+  inputEl.addEventListener("keydown", function(e){
+    if (e.key === "ArrowLeft"){
+      e.preventDefault();
+      activeSeg = activeSeg === "y" ? "m" : "d";
+      dPos = mPos = yPos = 0;
+      selectSegment(activeSeg);
+      return;
+    }
+    if (e.key === "ArrowRight"){
+      e.preventDefault();
+      activeSeg = activeSeg === "d" ? "m" : "y";
+      dPos = mPos = yPos = 0;
+      selectSegment(activeSeg);
+      return;
+    }
+    if (e.key === "Tab") return; // allow normal tabbing
+
+    if (!/^[0-9]$/.test(e.key)){
+      e.preventDefault();
+      return;
+    }
+    e.preventDefault();
+
+    const caretSeg = segmentFromCaret(inputEl.selectionStart);
+    activeSeg = caretSeg;
+
+    if (activeSeg === "d"){
+      d = (dPos === 0) ? (e.key + d[1]) : (d[0] + e.key);
+      dPos++;
+      if (dPos >= 2){
+        dPos = 0;
+        activeSeg = "m";
+        render();
+        selectSegment("m");
+        return;
+      }
+    } else if (activeSeg === "m"){
+      m = (mPos === 0) ? (e.key + m[1]) : (m[0] + e.key);
+      mPos++;
+      if (mPos >= 2){
+        mPos = 0;
+        activeSeg = "y";
+        render();
+        selectSegment("y");
+        return;
+      }
+    } else {
+      y = (y + e.key).slice(-4);
+      if (y.length < 4) y = y.padStart(y.length, "0");
+      yPos++;
+      if (yPos >= 4){ yPos = 0; }
+    }
+    render();
+    selectSegment(activeSeg);
+  });
+
+  return {
+    reset(){ today(); render(); },
+    setValue(dateStr){
+      const parts = String(dateStr || "").split("/");
+      if (parts.length === 3){
+        d = parts[0].padStart(2, "0");
+        m = parts[1].padStart(2, "0");
+        y = parts[2].padStart(4, "0");
+        render();
+      }
+    },
+    getValue(){ return inputEl.value; },
+    focusDay(){ inputEl.focus(); selectSegment("d"); }
+  };
+}
+
 const dateInput = document.getElementById("dateInput");
-let dSeg = "", mSeg = "", ySeg = "";
+const expenseDate = makeSegmentedDateInput(dateInput);
 
-function todaySegments(){
+const creditDateInput = document.getElementById("creditDateInput");
+const creditDate = makeSegmentedDateInput(creditDateInput);
+
+const statementFromInput = document.getElementById("statementFromInput");
+const statementToInput = document.getElementById("statementToInput");
+const statementFromDate = makeSegmentedDateInput(statementFromInput);
+const statementToDate = makeSegmentedDateInput(statementToInput);
+
+// sensible default range: 1st of this month -> today
+(function initStatementDefaults(){
   const now = new Date();
-  dSeg = String(now.getDate()).padStart(2, "0");
-  mSeg = String(now.getMonth() + 1).padStart(2, "0");
-  ySeg = String(now.getFullYear());
-}
-
-function renderDate(){
-  dateInput.value = `${dSeg}/${mSeg}/${ySeg}`;
-}
-
-function selectSegment(name){
-  let start, end;
-  if (name === "d"){ start = 0; end = 2; }
-  else if (name === "m"){ start = 3; end = 5; }
-  else { start = 6; end = 10; }
-  dateInput.setSelectionRange(start, end);
-}
-
-function segmentFromCaret(pos){
-  if (pos <= 2) return "d";
-  if (pos <= 5) return "m";
-  return "y";
-}
-
-todaySegments();
-renderDate();
-
-dateInput.addEventListener("focus", () => selectSegment("d"));
-dateInput.addEventListener("click", () => {
-  const seg = segmentFromCaret(dateInput.selectionStart);
-  selectSegment(seg);
-});
-
-let dPos = 0, mPos = 0, yPos = 0;
-let activeSeg = "d";
-
-dateInput.addEventListener("keydown", function(e){
-  if (e.key === "ArrowLeft"){
-    e.preventDefault();
-    activeSeg = activeSeg === "y" ? "m" : "d";
-    dPos = mPos = yPos = 0;
-    selectSegment(activeSeg);
-    return;
-  }
-  if (e.key === "ArrowRight"){
-    e.preventDefault();
-    activeSeg = activeSeg === "d" ? "m" : "y";
-    dPos = mPos = yPos = 0;
-    selectSegment(activeSeg);
-    return;
-  }
-  if (e.key === "Tab") return; // allow normal tabbing
-
-  if (!/^[0-9]$/.test(e.key)){
-    e.preventDefault();
-    return;
-  }
-  e.preventDefault();
-
-  const caretSeg = segmentFromCaret(dateInput.selectionStart);
-  activeSeg = caretSeg;
-
-  if (activeSeg === "d"){
-    dSeg = (dPos === 0) ? (e.key + dSeg[1]) : (dSeg[0] + e.key);
-    dPos++;
-    if (dPos >= 2){
-      dPos = 0;
-      activeSeg = "m";
-      renderDate();
-      selectSegment("m");
-      return;
-    }
-  } else if (activeSeg === "m"){
-    mSeg = (mPos === 0) ? (e.key + mSeg[1]) : (mSeg[0] + e.key);
-    mPos++;
-    if (mPos >= 2){
-      mPos = 0;
-      activeSeg = "y";
-      renderDate();
-      selectSegment("y");
-      return;
-    }
-  } else {
-    ySeg = (ySeg + e.key).slice(-4);
-    if (ySeg.length < 4) ySeg = ySeg.padStart(ySeg.length, "0");
-    yPos++;
-    if (yPos >= 4){ yPos = 0; }
-  }
-  renderDate();
-  selectSegment(activeSeg);
-});
+  const firstOfMonth = `01/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+  statementFromDate.setValue(firstOfMonth);
+  // statementToDate already defaults to today via the factory
+})();
 
 /* ============================================================
    CALCULATOR: Qty x Rate -> Amount
@@ -618,7 +784,7 @@ function loadExpenses(){
   const callbackName = "handleData";
   const script = document.createElement("script");
   const cacheBuster = new Date().getTime();
-  script.src = `${SCRIPT_URL}?callback=${callbackName}&_=${cacheBuster}`;
+  script.src = `${SCRIPT_URL}?type=expenses&callback=${callbackName}&_=${cacheBuster}`;
   script.onerror = function(){
     statusLine.textContent = "⚠ Could not reach the sheet. Check SCRIPT_URL and try again.";
   };
@@ -644,6 +810,33 @@ function handleData(data){
     `Synced — ${expenses.length} entr${expenses.length === 1 ? "y" : "ies"} loaded.`;
 }
 
+/* ============================================================
+   LOAD ACCOUNT CREDITS (JSONP)
+   ============================================================ */
+function loadCredits(){
+  const statusLine = document.getElementById("creditStatusLine");
+  statusLine.textContent = "Loading credits…";
+
+  const callbackName = "handleCreditData";
+  const script = document.createElement("script");
+  const cacheBuster = new Date().getTime();
+  script.src = `${SCRIPT_URL}?type=credits&callback=${callbackName}&_=${cacheBuster}`;
+  script.onerror = function(){
+    statusLine.textContent = "⚠ Could not reach the Credits sheet. Check SCRIPT_URL and try again.";
+  };
+  document.body.appendChild(script);
+  script.remove();
+}
+
+function handleCreditData(data){
+  credits = Array.isArray(data) ? data : [];
+  renderCreditsTable();
+  renderSummary();
+
+  document.getElementById("creditStatusLine").textContent =
+    `Synced — ${credits.length} credit entr${credits.length === 1 ? "y" : "ies"} loaded.`;
+}
+
 /* Parses "{qty} pcs @ Rs {rate}/pc" out of the description field */
 function parseDescription(desc){
   if (!desc) return { qty: "-", rate: "-" };
@@ -658,9 +851,18 @@ function formatRs(amount){
 }
 
 function renderSummary(){
-  const total = expenses.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
-  document.getElementById("totalSpent").textContent = formatRs(total);
+  const totalSpent = expenses.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
+  const totalCredited = credits.reduce((sum, row) => sum + (parseFloat(row.amount) || 0), 0);
+  const balance = totalCredited - totalSpent;
+
+  document.getElementById("totalSpent").textContent = formatRs(totalSpent);
+  document.getElementById("totalCredited").textContent = formatRs(totalCredited);
   document.getElementById("totalEntries").textContent = expenses.length;
+
+  const balanceEl = document.getElementById("balanceRemaining");
+  balanceEl.textContent = formatRs(balance);
+  balanceEl.classList.remove("positive", "negative");
+  balanceEl.classList.add(balance >= 0 ? "positive" : "negative");
 }
 
 function renderTable(){
@@ -695,6 +897,37 @@ function renderTable(){
   });
   tbody.querySelectorAll(".edit-btn").forEach(btn => {
     btn.addEventListener("click", () => beginEditExpense(parseInt(btn.dataset.index, 10)));
+  });
+}
+
+function renderCreditsTable(){
+  const tbody = document.getElementById("creditsTableBody");
+  tbody.innerHTML = "";
+
+  if (credits.length === 0){
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="4">No credits logged yet — add money in above.</td></tr>`;
+    return;
+  }
+
+  credits.forEach((row, index) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${row.date || "-"}</td>
+      <td>${row.source || "-"}</td>
+      <td class="num">${formatRs(row.amount)}</td>
+      <td class="action-cell">
+        <button type="button" class="edit-btn" data-index="${index}">Edit</button>
+        <button type="button" class="del-btn" data-index="${index}">Delete</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll(".del-btn").forEach(btn => {
+    btn.addEventListener("click", () => deleteCredit(parseInt(btn.dataset.index, 10)));
+  });
+  tbody.querySelectorAll(".edit-btn").forEach(btn => {
+    btn.addEventListener("click", () => beginEditCredit(parseInt(btn.dataset.index, 10)));
   });
 }
 
@@ -733,13 +966,6 @@ function postToSheet(payload, onDone){
    ============================================================ */
 let editingIndex = null; // null = adding a new entry, otherwise the index of the row being edited
 
-function focusDateSection(){
-  todaySegments();
-  renderDate();
-  dateInput.focus();
-  selectSegment("d");
-}
-
 function resetFormToAddMode(){
   editingIndex = null;
   document.getElementById("subcategoryInput").value = "";
@@ -748,7 +974,8 @@ function resetFormToAddMode(){
   amountInput.value = "";
   document.getElementById("submitBtn").textContent = "Add Expense";
   document.getElementById("cancelEditBtn").style.display = "none";
-  focusDateSection();
+  expenseDate.reset();
+  expenseDate.focusDay();
 }
 
 function beginEditExpense(index){
@@ -757,14 +984,7 @@ function beginEditExpense(index){
 
   editingIndex = index;
 
-  // populate date segments
-  const parts = String(row.date || "").split("/");
-  if (parts.length === 3){
-    dSeg = parts[0].padStart(2, "0");
-    mSeg = parts[1].padStart(2, "0");
-    ySeg = parts[2].padStart(4, "0");
-    renderDate();
-  }
+  expenseDate.setValue(row.date);
 
   if (row.category && allCategories().includes(row.category)){
     document.getElementById("categorySelect").value = row.category;
@@ -812,7 +1032,8 @@ document.getElementById("expenseForm").addEventListener("submit", function(e){
   }
 
   const payload = {
-    date: dateInput.value,
+    type: "expenses",
+    date: expenseDate.getValue(),
     category: categorySelect.value,
     subcategory: document.getElementById("subcategoryInput").value.trim(),
     description: description,
@@ -841,12 +1062,97 @@ document.getElementById("expenseForm").addEventListener("submit", function(e){
 function deleteExpense(index, btnEl){
   if (!confirm("Delete this expense entry?")) return;
 
-  document.querySelectorAll(".del-btn, .edit-btn").forEach(b => b.disabled = true);
+  document.querySelectorAll("#expenseTableBody .del-btn, #expenseTableBody .edit-btn").forEach(b => b.disabled = true);
   document.getElementById("statusLine").textContent = "Deleting expense…";
   if (editingIndex === index) resetFormToAddMode();
 
-  postToSheet({ action: "delete", index: index }, function(){
+  postToSheet({ type: "expenses", action: "delete", index: index }, function(){
     setTimeout(loadExpenses, 900);
+  });
+}
+
+/* ============================================================
+   ADD / EDIT ACCOUNT CREDIT
+   ============================================================ */
+let creditEditingIndex = null;
+const creditAmountInput = document.getElementById("creditAmountInput");
+const creditSourceInput = document.getElementById("creditSourceInput");
+
+function resetCreditFormToAddMode(){
+  creditEditingIndex = null;
+  creditAmountInput.value = "";
+  creditSourceInput.value = "";
+  document.getElementById("creditSubmitBtn").textContent = "Add Credit";
+  document.getElementById("creditCancelEditBtn").style.display = "none";
+  creditDate.reset();
+}
+
+function beginEditCredit(index){
+  const row = credits[index];
+  if (!row) return;
+
+  creditEditingIndex = index;
+  creditDate.setValue(row.date);
+  creditAmountInput.value = row.amount || "";
+  creditSourceInput.value = row.source || "";
+
+  document.getElementById("creditSubmitBtn").textContent = "Update Credit";
+  document.getElementById("creditCancelEditBtn").style.display = "block";
+  document.getElementById("creditStatusLine").textContent = "Editing entry — update the fields and press \u201cUpdate Credit\u201d.";
+
+  document.getElementById("creditForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+document.getElementById("creditCancelEditBtn").addEventListener("click", function(){
+  resetCreditFormToAddMode();
+  document.getElementById("creditStatusLine").textContent = "Edit cancelled.";
+});
+
+document.getElementById("creditForm").addEventListener("submit", function(e){
+  e.preventDefault();
+
+  const submitBtn = document.getElementById("creditSubmitBtn");
+  const amount = creditAmountInput.value;
+
+  if (!amount || isNaN(parseFloat(amount))){
+    alert("Please enter a valid credited amount.");
+    return;
+  }
+
+  const payload = {
+    type: "credits",
+    date: creditDate.getValue(),
+    source: creditSourceInput.value.trim(),
+    amount: amount
+  };
+
+  const isEditing = creditEditingIndex !== null;
+  if (isEditing) payload.action = "update";
+  if (isEditing) payload.index = creditEditingIndex;
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Saving...";
+  document.getElementById("creditStatusLine").textContent = isEditing ? "Updating credit…" : "Saving credit…";
+
+  postToSheet(payload, function(){
+    submitBtn.disabled = false;
+    resetCreditFormToAddMode();
+    setTimeout(loadCredits, 900);
+  });
+});
+
+/* ============================================================
+   DELETE ACCOUNT CREDIT
+   ============================================================ */
+function deleteCredit(index){
+  if (!confirm("Delete this credit entry?")) return;
+
+  document.querySelectorAll("#creditsTableBody .del-btn, #creditsTableBody .edit-btn").forEach(b => b.disabled = true);
+  document.getElementById("creditStatusLine").textContent = "Deleting credit…";
+  if (creditEditingIndex === index) resetCreditFormToAddMode();
+
+  postToSheet({ type: "credits", action: "delete", index: index }, function(){
+    setTimeout(loadCredits, 900);
   });
 }
 
@@ -874,6 +1180,30 @@ document.getElementById("exportCsvBtn").addEventListener("click", function(){
   const link = document.createElement("a");
   link.href = url;
   link.download = `construction-expenses-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById("exportCreditsCsvBtn").addEventListener("click", function(){
+  if (credits.length === 0){
+    alert("No credits to export yet.");
+    return;
+  }
+
+  const header = ["Date", "Source / Note", "Amount Credited (Rs)"];
+  const rows = credits.map(row => [row.date, row.source || "", (parseFloat(row.amount) || 0).toFixed(2)]);
+
+  const csvContent = [header, ...rows]
+    .map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `account-credits-${new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -932,11 +1262,209 @@ document.getElementById("generatePdfBtn").addEventListener("click", function(){
 });
 
 /* ============================================================
+   DATE RANGE STATEMENT (credits + expenses, chronological)
+   ============================================================ */
+function parseDMY(str){
+  const parts = String(str || "").split("/");
+  if (parts.length !== 3) return null;
+  const d = parseInt(parts[0], 10), m = parseInt(parts[1], 10), y = parseInt(parts[2], 10);
+  if (isNaN(d) || isNaN(m) || isNaN(y)) return null;
+  const dt = new Date(y, m - 1, d);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+function buildStatement(){
+  const fromStr = statementFromDate.getValue();
+  const toStr = statementToDate.getValue();
+  const from = parseDMY(fromStr);
+  const to = parseDMY(toStr);
+
+  if (!from || !to){
+    alert("Please enter a valid From and To date (DD/MM/YYYY).");
+    return null;
+  }
+  if (from > to){
+    alert("The From date must be on or before the To date.");
+    return null;
+  }
+
+  const fromTime = from.getTime();
+  const toTime = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999).getTime();
+
+  const txns = [];
+
+  expenses.forEach((row, idx) => {
+    const dt = parseDMY(row.date);
+    if (!dt) return;
+    if (dt.getTime() >= fromTime && dt.getTime() <= toTime){
+      const purposeParts = [row.category, row.subcategory].filter(Boolean);
+      txns.push({
+        date: row.date,
+        dateObj: dt,
+        type: "Expense",
+        purpose: purposeParts.join(" — ") || "-",
+        amountIn: 0,
+        amountOut: parseFloat(row.amount) || 0,
+        order: idx
+      });
+    }
+  });
+
+  credits.forEach((row, idx) => {
+    const dt = parseDMY(row.date);
+    if (!dt) return;
+    if (dt.getTime() >= fromTime && dt.getTime() <= toTime){
+      txns.push({
+        date: row.date,
+        dateObj: dt,
+        type: "Credit",
+        purpose: row.source || "-",
+        amountIn: parseFloat(row.amount) || 0,
+        amountOut: 0,
+        order: idx
+      });
+    }
+  });
+
+  // chronological order; same-day entries keep the order they were logged in
+  txns.sort((a, b) => a.dateObj - b.dateObj || a.order - b.order);
+
+  return { txns, fromStr, toStr };
+}
+
+function renderStatement(result){
+  const tbody = document.getElementById("statementTableBody");
+  const summaryGrid = document.getElementById("statementSummaryGrid");
+  const statusLine = document.getElementById("statementStatusLine");
+  tbody.innerHTML = "";
+
+  if (!result || result.txns.length === 0){
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="5">No transactions found in that date range.</td></tr>`;
+    summaryGrid.style.display = "none";
+    statusLine.textContent = result ? `No activity between ${result.fromStr} and ${result.toStr}.` : "";
+    return;
+  }
+
+  let totalIn = 0, totalOut = 0;
+  result.txns.forEach(t => {
+    totalIn += t.amountIn;
+    totalOut += t.amountOut;
+    const tr = document.createElement("tr");
+    const typeColor = t.type === "Credit" ? "var(--green-ok)" : "var(--rust)";
+    tr.innerHTML = `
+      <td>${t.date}</td>
+      <td style="color:${typeColor}; font-weight:700;">${t.type}</td>
+      <td>${t.purpose}</td>
+      <td class="num">${t.amountIn ? formatRs(t.amountIn) : "-"}</td>
+      <td class="num">${t.amountOut ? formatRs(t.amountOut) : "-"}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById("statementTotalIn").textContent = formatRs(totalIn);
+  document.getElementById("statementTotalOut").textContent = formatRs(totalOut);
+  const net = totalIn - totalOut;
+  const netEl = document.getElementById("statementNet");
+  netEl.textContent = formatRs(net);
+  netEl.classList.remove("positive", "negative");
+  netEl.classList.add(net >= 0 ? "positive" : "negative");
+
+  summaryGrid.style.display = "grid";
+  statusLine.textContent =
+    `Showing ${result.txns.length} transaction${result.txns.length === 1 ? "" : "s"} from ${result.fromStr} to ${result.toStr}.`;
+}
+
+document.getElementById("viewStatementBtn").addEventListener("click", function(){
+  renderStatement(buildStatement());
+});
+
+document.getElementById("exportStatementCsvBtn").addEventListener("click", function(){
+  const result = buildStatement();
+  if (!result) return;
+  renderStatement(result);
+  if (result.txns.length === 0){
+    alert("No transactions found in that date range.");
+    return;
+  }
+
+  const header = ["Date", "Type", "Purpose / Category", "Money In (Rs)", "Money Out (Rs)"];
+  const rows = result.txns.map(t => [
+    t.date, t.type, t.purpose,
+    t.amountIn ? t.amountIn.toFixed(2) : "",
+    t.amountOut ? t.amountOut.toFixed(2) : ""
+  ]);
+
+  const csvContent = [header, ...rows]
+    .map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `statement-${result.fromStr.replace(/\//g, "-")}_to_${result.toStr.replace(/\//g, "-")}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById("exportStatementPdfBtn").addEventListener("click", function(){
+  const result = buildStatement();
+  if (!result) return;
+  renderStatement(result);
+  if (result.txns.length === 0){
+    alert("No transactions found in that date range.");
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+
+  doc.setFontSize(18);
+  doc.setFont(undefined, "bold");
+  doc.text("Account Statement", 14, 18);
+
+  doc.setFontSize(11);
+  doc.setFont(undefined, "normal");
+  doc.text(`Period: ${result.fromStr} to ${result.toStr}`, 14, 26);
+  doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 32);
+
+  const tableRows = result.txns.map(t => [
+    t.date, t.type, t.purpose,
+    t.amountIn ? formatRs(t.amountIn) : "-",
+    t.amountOut ? formatRs(t.amountOut) : "-"
+  ]);
+
+  doc.autoTable({
+    startY: 38,
+    head: [["Date", "Type", "Purpose / Category", "Money In", "Money Out"]],
+    body: tableRows,
+    headStyles: { fillColor: [22, 50, 79] },
+    styles: { fontSize: 9.5 }
+  });
+
+  let totalIn = 0, totalOut = 0;
+  result.txns.forEach(t => { totalIn += t.amountIn; totalOut += t.amountOut; });
+  const net = totalIn - totalOut;
+  const finalY = doc.lastAutoTable.finalY || 38;
+
+  doc.setFontSize(11);
+  doc.setFont(undefined, "bold");
+  doc.text(`Total In: ${formatRs(totalIn)}`, 14, finalY + 10);
+  doc.text(`Total Out: ${formatRs(totalOut)}`, 14, finalY + 17);
+  doc.text(`Net: ${formatRs(net)}`, 14, finalY + 24);
+
+  doc.save(`statement-${result.fromStr.replace(/\//g, "-")}_to_${result.toStr.replace(/\//g, "-")}.pdf`);
+});
+
+/* ============================================================
    INIT
    ============================================================ */
 rebuildCategorySelect();
 rebuildPdfCategorySelect();
 loadExpenses();
+loadCredits();
 </script>
 
 </body>
