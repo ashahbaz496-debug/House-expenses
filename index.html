@@ -297,6 +297,62 @@
   .edit-btn:hover{ background:var(--blueprint); color:#fff; }
   .edit-btn:disabled{ opacity:0.5; cursor:not-allowed; }
 
+  /* ---------- INLINE EDIT ROW ---------- */
+  tr.edit-row td{
+    background:#FDF6E3;
+    padding:16px 14px;
+    border-bottom:2px solid var(--safety);
+  }
+  .inline-edit-grid{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:flex-end;
+    gap:12px;
+  }
+  .inline-edit-field{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    flex:1 1 120px;
+    min-width:110px;
+  }
+  .inline-edit-field label{
+    font-size:11px;
+    color:var(--ink-soft);
+    margin:0;
+  }
+  .inline-edit-field input, .inline-edit-field select{
+    padding:8px 9px;
+    border:1px solid var(--line-strong);
+    background:#fff;
+    font-size:13.5px;
+    font-family:inherit;
+  }
+  .inline-edit-actions{
+    display:flex;
+    gap:8px;
+    flex:0 0 auto;
+  }
+  .save-btn{
+    background:var(--green-ok);
+    border:1px solid var(--green-ok);
+    color:#fff;
+    font-size:12.5px;
+    padding:8px 16px;
+    font-weight:700;
+  }
+  .save-btn:hover{ opacity:0.88; }
+  .save-btn:disabled{ opacity:0.5; cursor:not-allowed; }
+  .inline-cancel-btn{
+    background:none;
+    border:1px solid var(--ink-soft);
+    color:var(--ink-soft);
+    font-size:12.5px;
+    padding:8px 16px;
+    font-weight:700;
+  }
+  .inline-cancel-btn:hover{ background:var(--ink-soft); color:#fff; }
+
   footer{
     text-align:center;
     padding:26px 20px 34px;
@@ -405,7 +461,6 @@
       </div>
 
       <button type="submit" class="btn-primary" id="submitBtn">Add Expense</button>
-      <button type="button" class="btn-outline" id="cancelEditBtn" style="display:none; width:100%; margin-top:10px;">Cancel Edit</button>
     </form>
   </section>
 
@@ -430,7 +485,6 @@
         <input type="text" id="creditSourceInput" placeholder="e.g. Salary, Bank transfer, Loan from uncle">
       </div>
       <button type="submit" class="btn-primary" id="creditSubmitBtn">Add Credit</button>
-      <button type="button" class="btn-outline" id="creditCancelEditBtn" style="display:none; width:100%; margin-top:10px;">Cancel Edit</button>
     </form>
   </section>
 
@@ -565,6 +619,9 @@ const BASE_CATEGORIES = [
 let customCategories = [];
 let expenses = []; // cache of loaded rows, each: {date, category, subcategory, description, amount}
 let credits = []; // cache of loaded rows, each: {date, source, amount}
+
+let expenseEditingIndex = null; // index of the expense row currently shown inline for editing (null = none)
+let creditEditingIndex = null;  // index of the credit row currently shown inline for editing (null = none)
 
 /* ============================================================
    CATEGORY DROPDOWNS
@@ -899,6 +956,10 @@ function renderTable(){
   }
 
   expenses.forEach((row, index) => {
+    if (expenseEditingIndex === index){
+      tbody.appendChild(buildExpenseEditRow(row, index));
+      return;
+    }
     const { qty, rate } = parseDescription(row.description);
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -920,7 +981,126 @@ function renderTable(){
     btn.addEventListener("click", () => deleteExpense(parseInt(btn.dataset.index, 10), btn));
   });
   tbody.querySelectorAll(".edit-btn").forEach(btn => {
-    btn.addEventListener("click", () => beginEditExpense(parseInt(btn.dataset.index, 10)));
+    btn.addEventListener("click", () => {
+      expenseEditingIndex = parseInt(btn.dataset.index, 10);
+      renderTable();
+    });
+  });
+}
+
+/**
+ * Builds the inline edit row shown directly under an expense entry
+ * when its Edit button is pressed — no scrolling to the top form.
+ */
+function buildExpenseEditRow(row, index){
+  const { qty, rate } = parseDescription(row.description);
+  const escSub = String(row.subcategory || "").replace(/"/g, "&quot;");
+  const tr = document.createElement("tr");
+  tr.className = "edit-row";
+  tr.innerHTML = `
+    <td colspan="7">
+      <div class="inline-edit-grid">
+        <div class="inline-edit-field">
+          <label>Date (DD/MM/YYYY)</label>
+          <input type="text" id="ee-date-${index}" maxlength="10" inputmode="numeric" value="${row.date || ""}">
+        </div>
+        <div class="inline-edit-field">
+          <label>Category</label>
+          <select id="ee-category-${index}"></select>
+        </div>
+        <div class="inline-edit-field" style="flex:1 1 180px;">
+          <label>Sub-category / Notes</label>
+          <input type="text" id="ee-subcategory-${index}" value="${escSub}">
+        </div>
+        <div class="inline-edit-field">
+          <label>Quantity</label>
+          <input type="number" id="ee-qty-${index}" min="0" step="any" value="${qty !== "-" ? qty : ""}">
+        </div>
+        <div class="inline-edit-field">
+          <label>Rate / Piece (Rs)</label>
+          <input type="number" id="ee-rate-${index}" min="0" step="any" value="${rate !== "-" ? rate : ""}">
+        </div>
+        <div class="inline-edit-field">
+          <label>Total Amount (Rs)</label>
+          <input type="number" id="ee-amount-${index}" min="0" step="any" value="${row.amount || ""}">
+        </div>
+        <div class="inline-edit-actions">
+          <button type="button" class="save-btn" id="ee-save-${index}">Save</button>
+          <button type="button" class="inline-cancel-btn" id="ee-cancel-${index}">Cancel</button>
+        </div>
+      </div>
+    </td>
+  `;
+
+  const sel = tr.querySelector(`#ee-category-${index}`);
+  allCategories().forEach(cat => {
+    const opt = document.createElement("option");
+    opt.value = cat;
+    opt.textContent = cat;
+    sel.appendChild(opt);
+  });
+  if (row.category && allCategories().includes(row.category)) sel.value = row.category;
+
+  const qtyEl = tr.querySelector(`#ee-qty-${index}`);
+  const rateEl = tr.querySelector(`#ee-rate-${index}`);
+  const amtEl = tr.querySelector(`#ee-amount-${index}`);
+  function recalcInline(){
+    const q = parseFloat(qtyEl.value), r = parseFloat(rateEl.value);
+    if (!isNaN(q) && !isNaN(r)) amtEl.value = (q * r).toFixed(2);
+  }
+  qtyEl.addEventListener("input", recalcInline);
+  rateEl.addEventListener("input", recalcInline);
+
+  tr.querySelector(`#ee-save-${index}`).addEventListener("click", () => saveInlineExpenseEdit(index));
+  tr.querySelector(`#ee-cancel-${index}`).addEventListener("click", () => {
+    expenseEditingIndex = null;
+    renderTable();
+  });
+
+  return tr;
+}
+
+function saveInlineExpenseEdit(index){
+  const dateVal = document.getElementById(`ee-date-${index}`).value.trim();
+  const categoryVal = document.getElementById(`ee-category-${index}`).value;
+  const subcategoryVal = document.getElementById(`ee-subcategory-${index}`).value.trim();
+  const qtyVal = document.getElementById(`ee-qty-${index}`).value;
+  const rateVal = document.getElementById(`ee-rate-${index}`).value;
+  const amountVal = document.getElementById(`ee-amount-${index}`).value;
+
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateVal)){
+    alert("Please enter the date as DD/MM/YYYY.");
+    return;
+  }
+  if (!amountVal || isNaN(parseFloat(amountVal))){
+    alert("Please enter a valid total amount.");
+    return;
+  }
+
+  let description = "";
+  if (qtyVal && rateVal && !isNaN(parseFloat(qtyVal)) && !isNaN(parseFloat(rateVal))){
+    description = `${qtyVal} pcs @ Rs ${rateVal}/pc`;
+  }
+
+  const payload = {
+    type: "expenses",
+    action: "update",
+    index: index,
+    date: dateVal,
+    category: categoryVal,
+    subcategory: subcategoryVal,
+    description: description,
+    amount: amountVal
+  };
+
+  const saveBtn = document.getElementById(`ee-save-${index}`);
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving...";
+  document.getElementById("statusLine").textContent = "Updating expense…";
+
+  postToSheet(payload, function(){
+    expenseEditingIndex = null;
+    setTimeout(loadExpenses, 900);
   });
 }
 
@@ -934,6 +1114,10 @@ function renderCreditsTable(){
   }
 
   credits.forEach((row, index) => {
+    if (creditEditingIndex === index){
+      tbody.appendChild(buildCreditEditRow(row, index));
+      return;
+    }
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${row.date || "-"}</td>
@@ -951,7 +1135,84 @@ function renderCreditsTable(){
     btn.addEventListener("click", () => deleteCredit(parseInt(btn.dataset.index, 10)));
   });
   tbody.querySelectorAll(".edit-btn").forEach(btn => {
-    btn.addEventListener("click", () => beginEditCredit(parseInt(btn.dataset.index, 10)));
+    btn.addEventListener("click", () => {
+      creditEditingIndex = parseInt(btn.dataset.index, 10);
+      renderCreditsTable();
+    });
+  });
+}
+
+/**
+ * Builds the inline edit row shown directly under a credit entry
+ * when its Edit button is pressed — no scrolling to the top form.
+ */
+function buildCreditEditRow(row, index){
+  const escSource = String(row.source || "").replace(/"/g, "&quot;");
+  const tr = document.createElement("tr");
+  tr.className = "edit-row";
+  tr.innerHTML = `
+    <td colspan="4">
+      <div class="inline-edit-grid">
+        <div class="inline-edit-field">
+          <label>Date (DD/MM/YYYY)</label>
+          <input type="text" id="ce-date-${index}" maxlength="10" inputmode="numeric" value="${row.date || ""}">
+        </div>
+        <div class="inline-edit-field" style="flex:1 1 180px;">
+          <label>Source / Note</label>
+          <input type="text" id="ce-source-${index}" value="${escSource}">
+        </div>
+        <div class="inline-edit-field">
+          <label>Amount Credited (Rs)</label>
+          <input type="number" id="ce-amount-${index}" min="0" step="any" value="${row.amount || ""}">
+        </div>
+        <div class="inline-edit-actions">
+          <button type="button" class="save-btn" id="ce-save-${index}">Save</button>
+          <button type="button" class="inline-cancel-btn" id="ce-cancel-${index}">Cancel</button>
+        </div>
+      </div>
+    </td>
+  `;
+
+  tr.querySelector(`#ce-save-${index}`).addEventListener("click", () => saveInlineCreditEdit(index));
+  tr.querySelector(`#ce-cancel-${index}`).addEventListener("click", () => {
+    creditEditingIndex = null;
+    renderCreditsTable();
+  });
+
+  return tr;
+}
+
+function saveInlineCreditEdit(index){
+  const dateVal = document.getElementById(`ce-date-${index}`).value.trim();
+  const sourceVal = document.getElementById(`ce-source-${index}`).value.trim();
+  const amountVal = document.getElementById(`ce-amount-${index}`).value;
+
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateVal)){
+    alert("Please enter the date as DD/MM/YYYY.");
+    return;
+  }
+  if (!amountVal || isNaN(parseFloat(amountVal))){
+    alert("Please enter a valid credited amount.");
+    return;
+  }
+
+  const payload = {
+    type: "credits",
+    action: "update",
+    index: index,
+    date: dateVal,
+    source: sourceVal,
+    amount: amountVal
+  };
+
+  const saveBtn = document.getElementById(`ce-save-${index}`);
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving...";
+  document.getElementById("creditStatusLine").textContent = "Updating credit…";
+
+  postToSheet(payload, function(){
+    creditEditingIndex = null;
+    setTimeout(loadCredits, 900);
   });
 }
 
@@ -986,51 +1247,15 @@ function postToSheet(payload, onDone){
 }
 
 /* ============================================================
-   ADD / EDIT EXPENSE
+   ADD EXPENSE (top form is add-only — editing happens inline in the table)
    ============================================================ */
-let editingIndex = null; // null = adding a new entry, otherwise the index of the row being edited
-
 function resetFormToAddMode(){
-  editingIndex = null;
   document.getElementById("subcategoryInput").value = "";
   qtyInput.value = "";
   rateInput.value = "";
   amountInput.value = "";
-  document.getElementById("submitBtn").textContent = "Add Expense";
-  document.getElementById("cancelEditBtn").style.display = "none";
   expenseDate.reset();
-  expenseDate.focusDay();
 }
-
-function beginEditExpense(index){
-  const row = expenses[index];
-  if (!row) return;
-
-  editingIndex = index;
-
-  expenseDate.setValue(row.date);
-
-  if (row.category && allCategories().includes(row.category)){
-    document.getElementById("categorySelect").value = row.category;
-  }
-  document.getElementById("subcategoryInput").value = row.subcategory || "";
-
-  const { qty, rate } = parseDescription(row.description);
-  qtyInput.value = qty !== "-" ? qty : "";
-  rateInput.value = rate !== "-" ? rate : "";
-  amountInput.value = row.amount || "";
-
-  document.getElementById("submitBtn").textContent = "Update Expense";
-  document.getElementById("cancelEditBtn").style.display = "block";
-  document.getElementById("statusLine").textContent = "Editing entry — update the fields and press \u201cUpdate Expense\u201d.";
-
-  document.getElementById("expenseForm").scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-document.getElementById("cancelEditBtn").addEventListener("click", function(){
-  resetFormToAddMode();
-  document.getElementById("statusLine").textContent = "Edit cancelled.";
-});
 
 document.getElementById("expenseForm").addEventListener("submit", function(e){
   e.preventDefault();
@@ -1064,16 +1289,13 @@ document.getElementById("expenseForm").addEventListener("submit", function(e){
     amount: amount
   };
 
-  const isEditing = editingIndex !== null;
-  if (isEditing) payload.action = "update";
-  if (isEditing) payload.index = editingIndex;
-
   submitBtn.disabled = true;
   submitBtn.textContent = "Saving...";
-  document.getElementById("statusLine").textContent = isEditing ? "Updating expense…" : "Saving expense…";
+  document.getElementById("statusLine").textContent = "Saving expense…";
 
   postToSheet(payload, function(){
     submitBtn.disabled = false;
+    submitBtn.textContent = "Add Expense";
     resetFormToAddMode();
     // Apps Script needs a brief moment to commit the row before we re-fetch
     setTimeout(loadExpenses, 900);
@@ -1088,7 +1310,7 @@ function deleteExpense(index, btnEl){
 
   document.querySelectorAll("#expenseTableBody .del-btn, #expenseTableBody .edit-btn").forEach(b => b.disabled = true);
   document.getElementById("statusLine").textContent = "Deleting expense…";
-  if (editingIndex === index) resetFormToAddMode();
+  if (expenseEditingIndex === index) expenseEditingIndex = null;
 
   postToSheet({ type: "expenses", action: "delete", index: index }, function(){
     setTimeout(loadExpenses, 900);
@@ -1096,41 +1318,16 @@ function deleteExpense(index, btnEl){
 }
 
 /* ============================================================
-   ADD / EDIT ACCOUNT CREDIT
+   ADD ACCOUNT CREDIT (top form is add-only — editing happens inline in the table)
    ============================================================ */
-let creditEditingIndex = null;
 const creditAmountInput = document.getElementById("creditAmountInput");
 const creditSourceInput = document.getElementById("creditSourceInput");
 
 function resetCreditFormToAddMode(){
-  creditEditingIndex = null;
   creditAmountInput.value = "";
   creditSourceInput.value = "";
-  document.getElementById("creditSubmitBtn").textContent = "Add Credit";
-  document.getElementById("creditCancelEditBtn").style.display = "none";
   creditDate.reset();
 }
-
-function beginEditCredit(index){
-  const row = credits[index];
-  if (!row) return;
-
-  creditEditingIndex = index;
-  creditDate.setValue(row.date);
-  creditAmountInput.value = row.amount || "";
-  creditSourceInput.value = row.source || "";
-
-  document.getElementById("creditSubmitBtn").textContent = "Update Credit";
-  document.getElementById("creditCancelEditBtn").style.display = "block";
-  document.getElementById("creditStatusLine").textContent = "Editing entry — update the fields and press \u201cUpdate Credit\u201d.";
-
-  document.getElementById("creditForm").scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-document.getElementById("creditCancelEditBtn").addEventListener("click", function(){
-  resetCreditFormToAddMode();
-  document.getElementById("creditStatusLine").textContent = "Edit cancelled.";
-});
 
 document.getElementById("creditForm").addEventListener("submit", function(e){
   e.preventDefault();
@@ -1150,16 +1347,13 @@ document.getElementById("creditForm").addEventListener("submit", function(e){
     amount: amount
   };
 
-  const isEditing = creditEditingIndex !== null;
-  if (isEditing) payload.action = "update";
-  if (isEditing) payload.index = creditEditingIndex;
-
   submitBtn.disabled = true;
   submitBtn.textContent = "Saving...";
-  document.getElementById("creditStatusLine").textContent = isEditing ? "Updating credit…" : "Saving credit…";
+  document.getElementById("creditStatusLine").textContent = "Saving credit…";
 
   postToSheet(payload, function(){
     submitBtn.disabled = false;
+    submitBtn.textContent = "Add Credit";
     resetCreditFormToAddMode();
     setTimeout(loadCredits, 900);
   });
@@ -1173,7 +1367,7 @@ function deleteCredit(index){
 
   document.querySelectorAll("#creditsTableBody .del-btn, #creditsTableBody .edit-btn").forEach(b => b.disabled = true);
   document.getElementById("creditStatusLine").textContent = "Deleting credit…";
-  if (creditEditingIndex === index) resetCreditFormToAddMode();
+  if (creditEditingIndex === index) creditEditingIndex = null;
 
   postToSheet({ type: "credits", action: "delete", index: index }, function(){
     setTimeout(loadCredits, 900);
