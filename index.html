@@ -297,62 +297,6 @@
   .edit-btn:hover{ background:var(--blueprint); color:#fff; }
   .edit-btn:disabled{ opacity:0.5; cursor:not-allowed; }
 
-  /* ---------- INLINE EDIT ROW ---------- */
-  tr.edit-row td{
-    background:#FDF6E3;
-    padding:16px 14px;
-    border-bottom:2px solid var(--safety);
-  }
-  .inline-edit-grid{
-    display:flex;
-    flex-wrap:wrap;
-    align-items:flex-end;
-    gap:12px;
-  }
-  .inline-edit-field{
-    display:flex;
-    flex-direction:column;
-    gap:5px;
-    flex:1 1 120px;
-    min-width:110px;
-  }
-  .inline-edit-field label{
-    font-size:11px;
-    color:var(--ink-soft);
-    margin:0;
-  }
-  .inline-edit-field input, .inline-edit-field select{
-    padding:8px 9px;
-    border:1px solid var(--line-strong);
-    background:#fff;
-    font-size:13.5px;
-    font-family:inherit;
-  }
-  .inline-edit-actions{
-    display:flex;
-    gap:8px;
-    flex:0 0 auto;
-  }
-  .save-btn{
-    background:var(--green-ok);
-    border:1px solid var(--green-ok);
-    color:#fff;
-    font-size:12.5px;
-    padding:8px 16px;
-    font-weight:700;
-  }
-  .save-btn:hover{ opacity:0.88; }
-  .save-btn:disabled{ opacity:0.5; cursor:not-allowed; }
-  .inline-cancel-btn{
-    background:none;
-    border:1px solid var(--ink-soft);
-    color:var(--ink-soft);
-    font-size:12.5px;
-    padding:8px 16px;
-    font-weight:700;
-  }
-  .inline-cancel-btn:hover{ background:var(--ink-soft); color:#fff; }
-
   footer{
     text-align:center;
     padding:26px 20px 34px;
@@ -361,6 +305,22 @@
     color:var(--ink-soft);
     border-top:1px solid var(--line);
   }
+
+
+  .inline-edit-row:hover{ background:transparent !important; }
+  .inline-edit-row > td{ padding:0 !important; border-bottom:2px solid var(--blueprint) !important; }
+  .inline-edit-panel{
+    background:#F3EFE3;
+    border-left:4px solid var(--safety);
+    padding:18px 18px 8px;
+  }
+  .inline-edit-title{
+    margin:0 0 14px;
+    font-size:13.5px;
+    font-weight:700;
+    color:var(--blueprint);
+  }
+  .inline-edit-panel .toolbar{ margin-bottom:12px; }
 
   .mini-stat-grid{
     display:grid;
@@ -620,9 +580,6 @@ let customCategories = [];
 let expenses = []; // cache of loaded rows, each: {date, category, subcategory, description, amount}
 let credits = []; // cache of loaded rows, each: {date, source, amount}
 
-let expenseEditingIndex = null; // index of the expense row currently shown inline for editing (null = none)
-let creditEditingIndex = null;  // index of the credit row currently shown inline for editing (null = none)
-
 /* ============================================================
    CATEGORY DROPDOWNS
    ============================================================ */
@@ -870,9 +827,14 @@ function handleData(data){
 /* ============================================================
    LOAD ACCOUNT CREDITS (JSONP)
    ============================================================ */
+let creditLoadTimer = null;
 function loadCredits(){
   const statusLine = document.getElementById("creditStatusLine");
   statusLine.textContent = "Loading credits…";
+  clearTimeout(creditLoadTimer);
+  creditLoadTimer = setTimeout(() => {
+    statusLine.textContent = "⚠ No reply from the Credits endpoint. Re-deploy Code.gs as a NEW version (Deploy → Manage deployments → Edit → New version) and reload.";
+  }, 10000);
 
   const callbackName = "handleCreditData";
   const script = document.createElement("script");
@@ -886,7 +848,22 @@ function loadCredits(){
 }
 
 function handleCreditData(data){
-  credits = Array.isArray(data) ? data : [];
+  clearTimeout(creditLoadTimer);
+  const rows = Array.isArray(data) ? data : [];
+
+  // If the live Apps Script is an OLD deployment it ignores type=credits and
+  // returns the expenses sheet instead. Detect that instead of showing expenses as credits.
+  const looksLikeExpenses = rows.length > 0 && rows.some(r => r.category !== undefined || r.description !== undefined);
+  if (looksLikeExpenses){
+    credits = [];
+    renderCreditsTable();
+    renderSummary();
+    document.getElementById("creditStatusLine").textContent =
+      "⚠ Your live Apps Script is still the OLD version (it sent expense rows for credits). Paste the new Code.gs, then Deploy → Manage deployments → Edit → Version: New version → Deploy.";
+    return;
+  }
+
+  credits = rows;
   renderCreditsTable();
   renderSummary();
 
@@ -946,8 +923,24 @@ function renderSummary(){
   balanceEl.classList.add(balance >= 0 ? "positive" : "negative");
 }
 
+/* ---------- DATE SORTING (earliest first, latest last) ---------- */
+function sortedWithIndex(arr){
+  // keeps each row's ORIGINAL sheet index so edit/delete still hit the right row
+  return arr
+    .map((row, index) => ({ row, index, dt: parseDMY(row.date) }))
+    .sort((a, b) => {
+      const ta = a.dt ? a.dt.getTime() : Infinity;
+      const tb = b.dt ? b.dt.getTime() : Infinity;
+      return ta - tb || a.index - b.index;
+    });
+}
+function sortedRows(arr){
+  return sortedWithIndex(arr).map(x => x.row);
+}
+
 function renderTable(){
   const tbody = document.getElementById("expenseTableBody");
+  closeExpenseInlineEdit();
   tbody.innerHTML = "";
 
   if (expenses.length === 0){
@@ -955,157 +948,36 @@ function renderTable(){
     return;
   }
 
-  expenses.forEach((row, index) => {
-    if (expenseEditingIndex === index){
-      tbody.appendChild(buildExpenseEditRow(row, index));
-      return;
-    }
+  sortedWithIndex(expenses).forEach(({ row, index }) => {
     const { qty, rate } = parseDescription(row.description);
     const tr = document.createElement("tr");
+    tr.setAttribute("data-row-index", index);
     tr.innerHTML = `
-      <td>${row.date || "-"}</td>
-      <td>${row.category || "-"}</td>
-      <td>${row.subcategory || "-"}</td>
+      <td>${esc(row.date) || "-"}</td>
+      <td>${esc(row.category) || "-"}</td>
+      <td>${esc(row.subcategory) || "-"}</td>
       <td class="num">${qty}</td>
       <td class="num">${rate}</td>
       <td class="num">${formatRs(row.amount)}</td>
-      <td class="action-cell">
+      <td><div class="action-cell">
         <button type="button" class="edit-btn" data-index="${index}">Edit</button>
         <button type="button" class="del-btn" data-index="${index}">Delete</button>
-      </td>
+      </div></td>
     `;
     tbody.appendChild(tr);
   });
 
   tbody.querySelectorAll(".del-btn").forEach(btn => {
-    btn.addEventListener("click", () => deleteExpense(parseInt(btn.dataset.index, 10), btn));
+    btn.addEventListener("click", () => deleteExpense(parseInt(btn.dataset.index, 10)));
   });
   tbody.querySelectorAll(".edit-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      expenseEditingIndex = parseInt(btn.dataset.index, 10);
-      renderTable();
-    });
-  });
-}
-
-/**
- * Builds the inline edit row shown directly under an expense entry
- * when its Edit button is pressed — no scrolling to the top form.
- */
-function buildExpenseEditRow(row, index){
-  const { qty, rate } = parseDescription(row.description);
-  const escSub = String(row.subcategory || "").replace(/"/g, "&quot;");
-  const tr = document.createElement("tr");
-  tr.className = "edit-row";
-  tr.innerHTML = `
-    <td colspan="7">
-      <div class="inline-edit-grid">
-        <div class="inline-edit-field">
-          <label>Date (DD/MM/YYYY)</label>
-          <input type="text" id="ee-date-${index}" maxlength="10" inputmode="numeric" value="${row.date || ""}">
-        </div>
-        <div class="inline-edit-field">
-          <label>Category</label>
-          <select id="ee-category-${index}"></select>
-        </div>
-        <div class="inline-edit-field" style="flex:1 1 180px;">
-          <label>Sub-category / Notes</label>
-          <input type="text" id="ee-subcategory-${index}" value="${escSub}">
-        </div>
-        <div class="inline-edit-field">
-          <label>Quantity</label>
-          <input type="number" id="ee-qty-${index}" min="0" step="any" value="${qty !== "-" ? qty : ""}">
-        </div>
-        <div class="inline-edit-field">
-          <label>Rate / Piece (Rs)</label>
-          <input type="number" id="ee-rate-${index}" min="0" step="any" value="${rate !== "-" ? rate : ""}">
-        </div>
-        <div class="inline-edit-field">
-          <label>Total Amount (Rs)</label>
-          <input type="number" id="ee-amount-${index}" min="0" step="any" value="${row.amount || ""}">
-        </div>
-        <div class="inline-edit-actions">
-          <button type="button" class="save-btn" id="ee-save-${index}">Save</button>
-          <button type="button" class="inline-cancel-btn" id="ee-cancel-${index}">Cancel</button>
-        </div>
-      </div>
-    </td>
-  `;
-
-  const sel = tr.querySelector(`#ee-category-${index}`);
-  allCategories().forEach(cat => {
-    const opt = document.createElement("option");
-    opt.value = cat;
-    opt.textContent = cat;
-    sel.appendChild(opt);
-  });
-  if (row.category && allCategories().includes(row.category)) sel.value = row.category;
-
-  const qtyEl = tr.querySelector(`#ee-qty-${index}`);
-  const rateEl = tr.querySelector(`#ee-rate-${index}`);
-  const amtEl = tr.querySelector(`#ee-amount-${index}`);
-  function recalcInline(){
-    const q = parseFloat(qtyEl.value), r = parseFloat(rateEl.value);
-    if (!isNaN(q) && !isNaN(r)) amtEl.value = (q * r).toFixed(2);
-  }
-  qtyEl.addEventListener("input", recalcInline);
-  rateEl.addEventListener("input", recalcInline);
-
-  tr.querySelector(`#ee-save-${index}`).addEventListener("click", () => saveInlineExpenseEdit(index));
-  tr.querySelector(`#ee-cancel-${index}`).addEventListener("click", () => {
-    expenseEditingIndex = null;
-    renderTable();
-  });
-
-  return tr;
-}
-
-function saveInlineExpenseEdit(index){
-  const dateVal = document.getElementById(`ee-date-${index}`).value.trim();
-  const categoryVal = document.getElementById(`ee-category-${index}`).value;
-  const subcategoryVal = document.getElementById(`ee-subcategory-${index}`).value.trim();
-  const qtyVal = document.getElementById(`ee-qty-${index}`).value;
-  const rateVal = document.getElementById(`ee-rate-${index}`).value;
-  const amountVal = document.getElementById(`ee-amount-${index}`).value;
-
-  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateVal)){
-    alert("Please enter the date as DD/MM/YYYY.");
-    return;
-  }
-  if (!amountVal || isNaN(parseFloat(amountVal))){
-    alert("Please enter a valid total amount.");
-    return;
-  }
-
-  let description = "";
-  if (qtyVal && rateVal && !isNaN(parseFloat(qtyVal)) && !isNaN(parseFloat(rateVal))){
-    description = `${qtyVal} pcs @ Rs ${rateVal}/pc`;
-  }
-
-  const payload = {
-    type: "expenses",
-    action: "update",
-    index: index,
-    date: dateVal,
-    category: categoryVal,
-    subcategory: subcategoryVal,
-    description: description,
-    amount: amountVal
-  };
-
-  const saveBtn = document.getElementById(`ee-save-${index}`);
-  saveBtn.disabled = true;
-  saveBtn.textContent = "Saving...";
-  document.getElementById("statusLine").textContent = "Updating expense…";
-
-  postToSheet(payload, function(){
-    expenseEditingIndex = null;
-    setTimeout(loadExpenses, 900);
+    btn.addEventListener("click", () => toggleExpenseInlineEdit(parseInt(btn.dataset.index, 10)));
   });
 }
 
 function renderCreditsTable(){
   const tbody = document.getElementById("creditsTableBody");
+  closeCreditInlineEdit();
   tbody.innerHTML = "";
 
   if (credits.length === 0){
@@ -1113,20 +985,17 @@ function renderCreditsTable(){
     return;
   }
 
-  credits.forEach((row, index) => {
-    if (creditEditingIndex === index){
-      tbody.appendChild(buildCreditEditRow(row, index));
-      return;
-    }
+  sortedWithIndex(credits).forEach(({ row, index }) => {
     const tr = document.createElement("tr");
+    tr.setAttribute("data-row-index", index);
     tr.innerHTML = `
-      <td>${row.date || "-"}</td>
-      <td>${row.source || "-"}</td>
+      <td>${esc(row.date) || "-"}</td>
+      <td>${esc(row.source) || "-"}</td>
       <td class="num">${formatRs(row.amount)}</td>
-      <td class="action-cell">
+      <td><div class="action-cell">
         <button type="button" class="edit-btn" data-index="${index}">Edit</button>
         <button type="button" class="del-btn" data-index="${index}">Delete</button>
-      </td>
+      </div></td>
     `;
     tbody.appendChild(tr);
   });
@@ -1135,84 +1004,7 @@ function renderCreditsTable(){
     btn.addEventListener("click", () => deleteCredit(parseInt(btn.dataset.index, 10)));
   });
   tbody.querySelectorAll(".edit-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      creditEditingIndex = parseInt(btn.dataset.index, 10);
-      renderCreditsTable();
-    });
-  });
-}
-
-/**
- * Builds the inline edit row shown directly under a credit entry
- * when its Edit button is pressed — no scrolling to the top form.
- */
-function buildCreditEditRow(row, index){
-  const escSource = String(row.source || "").replace(/"/g, "&quot;");
-  const tr = document.createElement("tr");
-  tr.className = "edit-row";
-  tr.innerHTML = `
-    <td colspan="4">
-      <div class="inline-edit-grid">
-        <div class="inline-edit-field">
-          <label>Date (DD/MM/YYYY)</label>
-          <input type="text" id="ce-date-${index}" maxlength="10" inputmode="numeric" value="${row.date || ""}">
-        </div>
-        <div class="inline-edit-field" style="flex:1 1 180px;">
-          <label>Source / Note</label>
-          <input type="text" id="ce-source-${index}" value="${escSource}">
-        </div>
-        <div class="inline-edit-field">
-          <label>Amount Credited (Rs)</label>
-          <input type="number" id="ce-amount-${index}" min="0" step="any" value="${row.amount || ""}">
-        </div>
-        <div class="inline-edit-actions">
-          <button type="button" class="save-btn" id="ce-save-${index}">Save</button>
-          <button type="button" class="inline-cancel-btn" id="ce-cancel-${index}">Cancel</button>
-        </div>
-      </div>
-    </td>
-  `;
-
-  tr.querySelector(`#ce-save-${index}`).addEventListener("click", () => saveInlineCreditEdit(index));
-  tr.querySelector(`#ce-cancel-${index}`).addEventListener("click", () => {
-    creditEditingIndex = null;
-    renderCreditsTable();
-  });
-
-  return tr;
-}
-
-function saveInlineCreditEdit(index){
-  const dateVal = document.getElementById(`ce-date-${index}`).value.trim();
-  const sourceVal = document.getElementById(`ce-source-${index}`).value.trim();
-  const amountVal = document.getElementById(`ce-amount-${index}`).value;
-
-  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dateVal)){
-    alert("Please enter the date as DD/MM/YYYY.");
-    return;
-  }
-  if (!amountVal || isNaN(parseFloat(amountVal))){
-    alert("Please enter a valid credited amount.");
-    return;
-  }
-
-  const payload = {
-    type: "credits",
-    action: "update",
-    index: index,
-    date: dateVal,
-    source: sourceVal,
-    amount: amountVal
-  };
-
-  const saveBtn = document.getElementById(`ce-save-${index}`);
-  saveBtn.disabled = true;
-  saveBtn.textContent = "Saving...";
-  document.getElementById("creditStatusLine").textContent = "Updating credit…";
-
-  postToSheet(payload, function(){
-    creditEditingIndex = null;
-    setTimeout(loadCredits, 900);
+    btn.addEventListener("click", () => toggleCreditInlineEdit(parseInt(btn.dataset.index, 10)));
   });
 }
 
@@ -1247,14 +1039,21 @@ function postToSheet(payload, onDone){
 }
 
 /* ============================================================
-   ADD EXPENSE (top form is add-only — editing happens inline in the table)
+   ADD EXPENSE (top form is add-only; editing happens inline in the table)
    ============================================================ */
-function resetFormToAddMode(){
+function esc(v){
+  return String(v == null ? "" : v)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function resetExpenseForm(){
   document.getElementById("subcategoryInput").value = "";
   qtyInput.value = "";
   rateInput.value = "";
   amountInput.value = "";
   expenseDate.reset();
+  expenseDate.focusDay();
 }
 
 document.getElementById("expenseForm").addEventListener("submit", function(e){
@@ -1296,21 +1095,138 @@ document.getElementById("expenseForm").addEventListener("submit", function(e){
   postToSheet(payload, function(){
     submitBtn.disabled = false;
     submitBtn.textContent = "Add Expense";
-    resetFormToAddMode();
-    // Apps Script needs a brief moment to commit the row before we re-fetch
+    resetExpenseForm();
     setTimeout(loadExpenses, 900);
   });
 });
 
 /* ============================================================
+   INLINE EDIT — EXPENSES (panel drops open right under the row)
+   ============================================================ */
+let openExpenseEditIndex = null;
+
+function closeExpenseInlineEdit(){
+  const existing = document.getElementById("expense-edit-row");
+  if (existing) existing.remove();
+  openExpenseEditIndex = null;
+}
+
+function toggleExpenseInlineEdit(index){
+  if (openExpenseEditIndex === index){ closeExpenseInlineEdit(); return; }
+  closeExpenseInlineEdit();
+
+  const row = expenses[index];
+  const targetTr = document.querySelector(`#expenseTableBody tr[data-row-index="${index}"]`);
+  if (!row || !targetTr) return;
+  openExpenseEditIndex = index;
+
+  const { qty, rate } = parseDescription(row.description);
+  const cats = allCategories().slice();
+  if (row.category && !cats.includes(row.category)) cats.push(row.category);
+
+  const editTr = document.createElement("tr");
+  editTr.id = "expense-edit-row";
+  editTr.className = "inline-edit-row";
+  editTr.innerHTML = `
+    <td colspan="7">
+      <div class="inline-edit-panel">
+        <p class="inline-edit-title">Edit this expense</p>
+        <div class="field-grid">
+          <div>
+            <label>Date (DD/MM/YYYY)</label>
+            <input type="text" class="ie-date" value="${esc(row.date)}" placeholder="DD/MM/YYYY" maxlength="10">
+          </div>
+          <div>
+            <label>Category</label>
+            <select class="ie-category">
+              ${cats.map(c => `<option value="${esc(c)}" ${c === row.category ? "selected" : ""}>${esc(c)}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <div class="amount-row">
+          <label>Sub-category / Notes (optional)</label>
+          <input type="text" class="ie-subcategory" value="${esc(row.subcategory)}">
+        </div>
+        <div class="calc-grid" style="margin-bottom:16px;">
+          <div>
+            <label>Quantity / Pieces</label>
+            <input type="number" class="ie-qty" step="any" value="${qty !== "-" ? esc(qty) : ""}">
+          </div>
+          <div>
+            <label>Rate Per Piece (Rs)</label>
+            <input type="number" class="ie-rate" step="any" value="${rate !== "-" ? esc(rate) : ""}">
+          </div>
+        </div>
+        <div class="amount-row">
+          <label>Total Amount (Rs)</label>
+          <input type="number" class="ie-amount" step="any" value="${esc(row.amount)}">
+        </div>
+        <div class="toolbar">
+          <button type="button" class="btn-primary ie-save" style="width:auto; padding:10px 22px;">Save Changes</button>
+          <button type="button" class="btn-outline ie-cancel">Cancel</button>
+        </div>
+      </div>
+    </td>`;
+  targetTr.after(editTr);
+
+  const q = editTr.querySelector(".ie-qty"), r = editTr.querySelector(".ie-rate"), a = editTr.querySelector(".ie-amount");
+  const recalc = () => {
+    const qv = parseFloat(q.value), rv = parseFloat(r.value);
+    if (!isNaN(qv) && !isNaN(rv)) a.value = (qv * rv).toFixed(2);
+  };
+  q.addEventListener("input", recalc);
+  r.addEventListener("input", recalc);
+
+  editTr.querySelector(".ie-cancel").addEventListener("click", closeExpenseInlineEdit);
+  editTr.querySelector(".ie-save").addEventListener("click", () => saveExpenseInlineEdit(index, editTr));
+  editTr.querySelector(".ie-date").focus({ preventScroll: true });
+}
+
+function saveExpenseInlineEdit(index, editTr){
+  const dateVal = editTr.querySelector(".ie-date").value.trim();
+  const amountVal = editTr.querySelector(".ie-amount").value;
+  const qtyVal = editTr.querySelector(".ie-qty").value;
+  const rateVal = editTr.querySelector(".ie-rate").value;
+
+  if (!parseDMY(dateVal)){ alert("Please enter a valid date as DD/MM/YYYY."); return; }
+  if (!amountVal || isNaN(parseFloat(amountVal))){ alert("Please enter a valid total amount."); return; }
+
+  let description = "";
+  if (qtyVal && rateVal && !isNaN(parseFloat(qtyVal)) && !isNaN(parseFloat(rateVal))){
+    description = `${qtyVal} pcs @ Rs ${rateVal}/pc`;
+  }
+
+  const payload = {
+    type: "expenses",
+    action: "update",
+    index: index,
+    date: dateVal,
+    category: editTr.querySelector(".ie-category").value,
+    subcategory: editTr.querySelector(".ie-subcategory").value.trim(),
+    description: description,
+    amount: amountVal
+  };
+
+  const saveBtn = editTr.querySelector(".ie-save");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving...";
+  document.getElementById("statusLine").textContent = "Updating expense…";
+
+  postToSheet(payload, function(){
+    closeExpenseInlineEdit();
+    setTimeout(loadExpenses, 900);
+  });
+}
+
+/* ============================================================
    DELETE EXPENSE
    ============================================================ */
-function deleteExpense(index, btnEl){
+function deleteExpense(index){
   if (!confirm("Delete this expense entry?")) return;
 
+  closeExpenseInlineEdit();
   document.querySelectorAll("#expenseTableBody .del-btn, #expenseTableBody .edit-btn").forEach(b => b.disabled = true);
   document.getElementById("statusLine").textContent = "Deleting expense…";
-  if (expenseEditingIndex === index) expenseEditingIndex = null;
 
   postToSheet({ type: "expenses", action: "delete", index: index }, function(){
     setTimeout(loadExpenses, 900);
@@ -1318,12 +1234,12 @@ function deleteExpense(index, btnEl){
 }
 
 /* ============================================================
-   ADD ACCOUNT CREDIT (top form is add-only — editing happens inline in the table)
+   ADD ACCOUNT CREDIT (top form is add-only)
    ============================================================ */
 const creditAmountInput = document.getElementById("creditAmountInput");
 const creditSourceInput = document.getElementById("creditSourceInput");
 
-function resetCreditFormToAddMode(){
+function resetCreditForm(){
   creditAmountInput.value = "";
   creditSourceInput.value = "";
   creditDate.reset();
@@ -1354,10 +1270,91 @@ document.getElementById("creditForm").addEventListener("submit", function(e){
   postToSheet(payload, function(){
     submitBtn.disabled = false;
     submitBtn.textContent = "Add Credit";
-    resetCreditFormToAddMode();
+    resetCreditForm();
     setTimeout(loadCredits, 900);
   });
 });
+
+/* ============================================================
+   INLINE EDIT — CREDITS
+   ============================================================ */
+let openCreditEditIndex = null;
+
+function closeCreditInlineEdit(){
+  const existing = document.getElementById("credit-edit-row");
+  if (existing) existing.remove();
+  openCreditEditIndex = null;
+}
+
+function toggleCreditInlineEdit(index){
+  if (openCreditEditIndex === index){ closeCreditInlineEdit(); return; }
+  closeCreditInlineEdit();
+
+  const row = credits[index];
+  const targetTr = document.querySelector(`#creditsTableBody tr[data-row-index="${index}"]`);
+  if (!row || !targetTr) return;
+  openCreditEditIndex = index;
+
+  const editTr = document.createElement("tr");
+  editTr.id = "credit-edit-row";
+  editTr.className = "inline-edit-row";
+  editTr.innerHTML = `
+    <td colspan="4">
+      <div class="inline-edit-panel">
+        <p class="inline-edit-title">Edit this credit</p>
+        <div class="field-grid">
+          <div>
+            <label>Date (DD/MM/YYYY)</label>
+            <input type="text" class="ie-date" value="${esc(row.date)}" placeholder="DD/MM/YYYY" maxlength="10">
+          </div>
+          <div>
+            <label>Amount Credited (Rs)</label>
+            <input type="number" class="ie-amount" step="any" value="${esc(row.amount)}">
+          </div>
+        </div>
+        <div class="amount-row">
+          <label>Source / Note (optional)</label>
+          <input type="text" class="ie-source" value="${esc(row.source)}">
+        </div>
+        <div class="toolbar">
+          <button type="button" class="btn-primary ie-save" style="width:auto; padding:10px 22px;">Save Changes</button>
+          <button type="button" class="btn-outline ie-cancel">Cancel</button>
+        </div>
+      </div>
+    </td>`;
+  targetTr.after(editTr);
+
+  editTr.querySelector(".ie-cancel").addEventListener("click", closeCreditInlineEdit);
+  editTr.querySelector(".ie-save").addEventListener("click", () => saveCreditInlineEdit(index, editTr));
+  editTr.querySelector(".ie-date").focus({ preventScroll: true });
+}
+
+function saveCreditInlineEdit(index, editTr){
+  const dateVal = editTr.querySelector(".ie-date").value.trim();
+  const amountVal = editTr.querySelector(".ie-amount").value;
+
+  if (!parseDMY(dateVal)){ alert("Please enter a valid date as DD/MM/YYYY."); return; }
+  if (!amountVal || isNaN(parseFloat(amountVal))){ alert("Please enter a valid credited amount."); return; }
+
+  const payload = {
+    type: "credits",
+    action: "update",
+    index: index,
+    date: dateVal,
+    source: editTr.querySelector(".ie-source").value.trim(),
+    amount: amountVal
+  };
+
+  const saveBtn = editTr.querySelector(".ie-save");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving...";
+  document.getElementById("creditStatusLine").textContent = "Updating credit…";
+
+  postToSheet(payload, function(){
+    closeCreditInlineEdit();
+    setTimeout(loadCredits, 900);
+  });
+}
 
 /* ============================================================
    DELETE ACCOUNT CREDIT
@@ -1365,9 +1362,9 @@ document.getElementById("creditForm").addEventListener("submit", function(e){
 function deleteCredit(index){
   if (!confirm("Delete this credit entry?")) return;
 
+  closeCreditInlineEdit();
   document.querySelectorAll("#creditsTableBody .del-btn, #creditsTableBody .edit-btn").forEach(b => b.disabled = true);
   document.getElementById("creditStatusLine").textContent = "Deleting credit…";
-  if (creditEditingIndex === index) creditEditingIndex = null;
 
   postToSheet({ type: "credits", action: "delete", index: index }, function(){
     setTimeout(loadCredits, 900);
@@ -1384,7 +1381,7 @@ document.getElementById("exportCsvBtn").addEventListener("click", function(){
   }
 
   const header = ["Date", "Category", "Sub-category", "Quantity", "Rate Per Piece (Rs)", "Total Amount (Rs)"];
-  const rows = expenses.map(row => {
+  const rows = sortedRows(expenses).map(row => {
     const { qty, rate } = parseDescription(row.description);
     return [row.date, row.category, row.subcategory || "", qty, rate, (parseFloat(row.amount) || 0).toFixed(2)];
   });
@@ -1411,7 +1408,7 @@ document.getElementById("exportCreditsCsvBtn").addEventListener("click", functio
   }
 
   const header = ["Date", "Source / Note", "Amount Credited (Rs)"];
-  const rows = credits.map(row => [row.date, row.source || "", (parseFloat(row.amount) || 0).toFixed(2)]);
+  const rows = sortedRows(credits).map(row => [row.date, row.source || "", (parseFloat(row.amount) || 0).toFixed(2)]);
 
   const csvContent = [header, ...rows]
     .map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
@@ -1435,9 +1432,9 @@ document.getElementById("generatePdfBtn").addEventListener("click", function(){
   const { jsPDF } = window.jspdf;
   const selectedCategory = document.getElementById("pdfCategorySelect").value;
 
-  const filtered = selectedCategory === "__all__"
-    ? expenses
-    : expenses.filter(row => row.category === selectedCategory);
+  const filtered = sortedRows(expenses).filter(row =>
+    selectedCategory === "__all__" || row.category === selectedCategory
+  );
 
   if (filtered.length === 0){
     alert("No expenses found for this category.");
