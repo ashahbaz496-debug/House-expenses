@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16324F">
+<meta name="format-detection" content="telephone=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Home Construction Expense Tracker</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -28,6 +32,7 @@
 
   *{ box-sizing:border-box; }
 
+  html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   html,body{
     margin:0;
     padding:0;
@@ -48,6 +53,9 @@
       linear-gradient(160deg, var(--blueprint) 0%, var(--blueprint-deep) 100%);
     color:#EFE9DA;
     padding:38px 20px 30px;
+    padding-top:max(38px, calc(env(safe-area-inset-top) + 20px));
+    padding-left:max(20px, env(safe-area-inset-left));
+    padding-right:max(20px, env(safe-area-inset-right));
     border-bottom:6px solid var(--safety);
   }
 
@@ -114,6 +122,8 @@
     max-width:920px;
     margin:0 auto;
     padding:28px 20px 60px;
+    padding-left:max(20px, env(safe-area-inset-left));
+    padding-right:max(20px, env(safe-area-inset-right));
   }
 
   .panel{
@@ -145,7 +155,11 @@
     margin-bottom:6px;
   }
 
-  input[type=text], input[type=number], select{
+  input[type=text], input[type=number], input[type=date], select{
+    -webkit-appearance:none;
+    appearance:none;
+    border-radius:0;
+    min-height:42px;
     width:100%;
     padding:10px 11px;
     border:1px solid var(--line-strong);
@@ -155,7 +169,7 @@
     font-family:inherit;
   }
 
-  input[type=text]:focus, input[type=number]:focus, select:focus{
+  input[type=text]:focus, input[type=number]:focus, input[type=date]:focus, select:focus{
     outline:2px solid var(--blueprint);
     outline-offset:1px;
   }
@@ -192,6 +206,15 @@
   button{
     font-family:inherit;
     cursor:pointer;
+    touch-action:manipulation;
+    -webkit-tap-highlight-color:rgba(232,163,61,0.25);
+  }
+  select{
+    background-image:linear-gradient(45deg,transparent 50%,var(--ink-soft) 50%),linear-gradient(135deg,var(--ink-soft) 50%,transparent 50%);
+    background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%;
+    background-size:5px 5px,5px 5px;
+    background-repeat:no-repeat;
+    padding-right:32px;
   }
 
   .btn-primary{
@@ -299,7 +322,7 @@
 
   footer{
     text-align:center;
-    padding:26px 20px 34px;
+    padding:26px 20px calc(34px + env(safe-area-inset-bottom));
     font-size:11.5px;
     letter-spacing:0.05em;
     color:var(--ink-soft);
@@ -363,9 +386,73 @@
   .mini-stat-value.positive{ color:var(--green-ok); }
   .mini-stat-value.negative{ color:var(--rust); }
 
-  @media (max-width:560px){
-    .field-grid, .calc-grid, .summary-grid, .mini-stat-grid{ grid-template-columns:1fr; }
-    .toolbar{ flex-direction:column; align-items:stretch; }
+  /* ---------- MOBILE (iOS Safari / Chrome on phones) ---------- */
+  @media (max-width:640px){
+    main{ padding-top:18px; padding-bottom:40px; }
+    .panel{ padding:16px; margin-bottom:16px; }
+    .panel h2{ font-size:16px; }
+
+    .field-grid, .calc-grid, .mini-stat-grid{ grid-template-columns:1fr; }
+    .summary-grid{ grid-template-columns:1fr 1fr; gap:10px; }
+    .tick-panel{ padding:12px 12px; }
+    .tick-value{ font-size:17px; word-break:break-word; }
+    h1.title{ font-size:24px; margin-bottom:18px; }
+
+    /* 16px inputs stop iOS Safari zooming the page on focus */
+    input[type=text], input[type=number], input[type=date], select{
+      font-size:16px;
+      min-height:46px;
+    }
+    .btn-primary{ min-height:48px; font-size:16px; }
+    .btn-outline{ min-height:46px; font-size:14.5px; white-space:normal; width:100%; }
+    .toolbar{ flex-direction:column; align-items:stretch; gap:10px; }
+    .toolbar .grow{ flex:none; }
+    .inline-edit-panel .toolbar .btn-primary{ width:100% !important; }
+
+    /* tables become stacked cards */
+    table, thead, tbody, tr, td{ display:block; width:100%; }
+    thead{ display:none; }
+    tbody tr{
+      border:1px solid var(--line);
+      background:#fff;
+      margin-bottom:10px;
+    }
+    tbody tr:hover{ background:#fff; }
+    tbody td{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:14px;
+      padding:9px 12px;
+      border-bottom:1px dashed var(--line);
+      text-align:right;
+    }
+    tbody td:last-child{ border-bottom:0; }
+    tbody td::before{
+      content:attr(data-label);
+      flex:none;
+      font-size:11.5px;
+      font-weight:700;
+      color:var(--ink-soft);
+      text-align:left;
+    }
+    td.num, th.num{ text-align:right; }
+    .action-cell{ width:100%; justify-content:flex-end; gap:10px; }
+    .del-btn, .edit-btn{ min-height:40px; padding:8px 16px; font-size:13px; }
+
+    tbody tr.empty-row{ border:0; background:transparent; }
+    .empty-row td{ display:block; text-align:center; }
+    .empty-row td::before{ content:none; }
+
+    tbody tr.date-group-row{ border:0; background:transparent; margin:16px 0 6px; }
+    .date-group-row td{ display:block; text-align:left; border:0 !important; }
+    .date-group-row td::before{ content:none; }
+    .group-meta{ display:block; margin:3px 0 0; }
+
+    tbody tr.ledger-credit{ background:#EEF4EC; }
+    tbody tr.inline-edit-row{ border:0; background:transparent; margin-top:-8px; }
+    .inline-edit-row td{ display:block; text-align:left; }
+    .inline-edit-row td::before{ content:none; }
   }
 </style>
 </head>
@@ -657,7 +744,25 @@ document.getElementById("categorySelect").addEventListener("change", function(){
 /* ============================================================
    SEGMENTED DATE INPUT (DD/MM/YYYY) — reusable factory
    ============================================================ */
+const IS_TOUCH = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+
+function toIso(dmy){
+  const p = String(dmy || "").split("/");
+  return p.length === 3 ? `${p[2].padStart(4,"0")}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}` : "";
+}
+function normalizeDMY(v){
+  const s = String(v || "").trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
+}
+
 function makeSegmentedDateInput(inputEl){
+  // phones/tablets get the native date picker (works properly with iOS + Android keyboards)
+  if (IS_TOUCH){
+    inputEl.type = "date";
+    inputEl.removeAttribute("maxlength");
+    inputEl.removeAttribute("inputmode");
+  }
   let d = "", m = "", y = "";
   let activeSeg = "d", dPos = 0, mPos = 0, yPos = 0;
 
@@ -669,10 +774,11 @@ function makeSegmentedDateInput(inputEl){
   }
 
   function render(){
-    inputEl.value = `${d}/${m}/${y}`;
+    inputEl.value = IS_TOUCH ? `${y}-${m}-${d}` : `${d}/${m}/${y}`;
   }
 
   function selectSegment(name){
+    if (IS_TOUCH) return;
     let start, end;
     if (name === "d"){ start = 0; end = 2; }
     else if (name === "m"){ start = 3; end = 5; }
@@ -695,7 +801,15 @@ function makeSegmentedDateInput(inputEl){
     selectSegment(seg);
   });
 
+  inputEl.addEventListener("input", () => {
+    if (!IS_TOUCH) return;
+    const mm = inputEl.value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (mm){ y = mm[1]; m = mm[2]; d = mm[3]; }
+  });
+
   inputEl.addEventListener("keydown", function(e){
+    if (IS_TOUCH) return;
+    if (e.key === "Unidentified" || e.keyCode === 229) return; // virtual keyboards: don't block
     if (e.key === "ArrowLeft"){
       e.preventDefault();
       activeSeg = activeSeg === "y" ? "m" : "d";
@@ -762,8 +876,8 @@ function makeSegmentedDateInput(inputEl){
         render();
       }
     },
-    getValue(){ return inputEl.value; },
-    focusDay(){ inputEl.focus(); selectSegment("d"); }
+    getValue(){ return IS_TOUCH ? normalizeDMY(inputEl.value) : inputEl.value; },
+    focusDay(){ if (IS_TOUCH) return; inputEl.focus(); selectSegment("d"); }
   };
 }
 
@@ -957,6 +1071,16 @@ function sortedRows(arr){
   return sortedWithIndex(arr).map(x => x.row);
 }
 
+function applyCardLabels(tbodyId){
+  const tbody = document.getElementById(tbodyId);
+  const table = tbody.closest("table");
+  const heads = Array.from(table.querySelectorAll("thead th")).map(th => th.textContent.trim());
+  tbody.querySelectorAll("tr").forEach(tr => {
+    if (tr.children.length !== heads.length) return;
+    Array.from(tr.children).forEach((td, i) => td.setAttribute("data-label", heads[i]));
+  });
+}
+
 function renderTable(){
   const tbody = document.getElementById("expenseTableBody");
   closeExpenseInlineEdit();
@@ -1065,6 +1189,7 @@ function renderTable(){
   tbody.querySelectorAll(".edit-btn").forEach(btn => {
     btn.addEventListener("click", () => toggleExpenseInlineEdit(parseInt(btn.dataset.index, 10)));
   });
+  applyCardLabels("expenseTableBody");
 }
 
 function renderCreditsTable(){
@@ -1098,6 +1223,7 @@ function renderCreditsTable(){
   tbody.querySelectorAll(".edit-btn").forEach(btn => {
     btn.addEventListener("click", () => toggleCreditInlineEdit(parseInt(btn.dataset.index, 10)));
   });
+  applyCardLabels("creditsTableBody");
 }
 
 /* ============================================================
@@ -1152,6 +1278,7 @@ document.getElementById("expenseForm").addEventListener("submit", function(e){
   e.preventDefault();
 
   const submitBtn = document.getElementById("submitBtn");
+  if (!parseDMY(expenseDate.getValue())){ alert("Please choose a valid date."); return; }
   const categorySelect = document.getElementById("categorySelect");
   const amount = amountInput.value;
 
@@ -1226,7 +1353,7 @@ function toggleExpenseInlineEdit(index){
         <div class="field-grid">
           <div>
             <label>Date (DD/MM/YYYY)</label>
-            <input type="text" class="ie-date" value="${esc(row.date)}" placeholder="DD/MM/YYYY" maxlength="10">
+            <input type="${IS_TOUCH ? "date" : "text"}" class="ie-date" value="${IS_TOUCH ? toIso(row.date) : esc(row.date)}" placeholder="DD/MM/YYYY" maxlength="10">
           </div>
           <div>
             <label>Category</label>
@@ -1275,7 +1402,7 @@ function toggleExpenseInlineEdit(index){
 }
 
 function saveExpenseInlineEdit(index, editTr){
-  const dateVal = editTr.querySelector(".ie-date").value.trim();
+  const dateVal = normalizeDMY(editTr.querySelector(".ie-date").value);
   const amountVal = editTr.querySelector(".ie-amount").value;
   const qtyVal = editTr.querySelector(".ie-qty").value;
   const rateVal = editTr.querySelector(".ie-rate").value;
@@ -1341,6 +1468,7 @@ document.getElementById("creditForm").addEventListener("submit", function(e){
   e.preventDefault();
 
   const submitBtn = document.getElementById("creditSubmitBtn");
+  if (!parseDMY(creditDate.getValue())){ alert("Please choose a valid date."); return; }
   const amount = creditAmountInput.value;
 
   if (!amount || isNaN(parseFloat(amount))){
@@ -1397,7 +1525,7 @@ function toggleCreditInlineEdit(index){
         <div class="field-grid">
           <div>
             <label>Date (DD/MM/YYYY)</label>
-            <input type="text" class="ie-date" value="${esc(row.date)}" placeholder="DD/MM/YYYY" maxlength="10">
+            <input type="${IS_TOUCH ? "date" : "text"}" class="ie-date" value="${IS_TOUCH ? toIso(row.date) : esc(row.date)}" placeholder="DD/MM/YYYY" maxlength="10">
           </div>
           <div>
             <label>Amount Credited (Rs)</label>
@@ -1422,7 +1550,7 @@ function toggleCreditInlineEdit(index){
 }
 
 function saveCreditInlineEdit(index, editTr){
-  const dateVal = editTr.querySelector(".ie-date").value.trim();
+  const dateVal = normalizeDMY(editTr.querySelector(".ie-date").value);
   const amountVal = editTr.querySelector(".ie-amount").value;
 
   if (!parseDMY(dateVal)){ alert("Please enter a valid date as DD/MM/YYYY."); return; }
@@ -1676,6 +1804,7 @@ function renderStatement(result){
   netEl.classList.remove("positive", "negative");
   netEl.classList.add(net >= 0 ? "positive" : "negative");
 
+  applyCardLabels("statementTableBody");
   summaryGrid.style.display = "grid";
   statusLine.textContent =
     `Showing ${result.txns.length} transaction${result.txns.length === 1 ? "" : "s"} from ${result.fromStr} to ${result.toStr}.`;
