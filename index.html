@@ -322,6 +322,22 @@
   }
   .inline-edit-panel .toolbar{ margin-bottom:12px; }
 
+
+  .date-group-row td{
+    background:#E6E0CD;
+    border-bottom:1px solid var(--line-strong) !important;
+    padding:9px 10px !important;
+    font-size:13px;
+  }
+  .date-group-row:hover{ background:transparent !important; }
+  .group-meta{ margin-left:10px; color:var(--ink-soft); font-size:12px; }
+  .ledger-credit td{ background:#EEF4EC; }
+  .type-tag{ font-weight:700; font-size:12px; }
+  .type-tag.credit{ color:var(--green-ok); }
+  .type-tag.expense{ color:var(--rust); }
+  td.bal{ font-weight:700; }
+  .muted-note{ font-size:11.5px; color:var(--ink-soft); }
+
   .mini-stat-grid{
     display:grid;
     grid-template-columns:repeat(3,1fr);
@@ -538,17 +554,18 @@
     <table>
       <thead>
         <tr>
-          <th>Date</th>
-          <th>Category</th>
-          <th>Sub-category</th>
-          <th class="num">Quantity</th>
-          <th class="num">Rate / Piece (Rs)</th>
-          <th class="num">Total Amount</th>
+          <th>Type</th>
+          <th>Purpose / Category</th>
+          <th class="num">Qty</th>
+          <th class="num">Rate (Rs)</th>
+          <th class="num">Money In</th>
+          <th class="num">Money Out</th>
+          <th class="num">Balance</th>
           <th>Action</th>
         </tr>
       </thead>
       <tbody id="expenseTableBody">
-        <tr class="empty-row"><td colspan="7">Loading…</td></tr>
+        <tr class="empty-row"><td colspan="8">Loading…</td></tr>
       </tbody>
     </table>
   </section>
@@ -857,6 +874,7 @@ function handleCreditData(data){
   if (looksLikeExpenses){
     credits = [];
     renderCreditsTable();
+    renderTable();
     renderSummary();
     document.getElementById("creditStatusLine").textContent =
       "⚠ Your live Apps Script is still the OLD version (it sent expense rows for credits). Paste the new Code.gs, then Deploy → Manage deployments → Edit → Version: New version → Deploy.";
@@ -865,6 +883,7 @@ function handleCreditData(data){
 
   credits = rows;
   renderCreditsTable();
+  renderTable();
   renderSummary();
 
   document.getElementById("creditStatusLine").textContent =
@@ -943,28 +962,101 @@ function renderTable(){
   closeExpenseInlineEdit();
   tbody.innerHTML = "";
 
-  if (expenses.length === 0){
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="7">No expenses logged yet — add your first entry above.</td></tr>`;
+  // one chronological ledger: credits (money in) + expenses (money out)
+  const entries = [];
+  sortedWithIndex(expenses).forEach(x => entries.push({ kind: "expense", row: x.row, index: x.index, dt: x.dt }));
+  sortedWithIndex(credits).forEach(x => entries.push({ kind: "credit", row: x.row, index: x.index, dt: x.dt }));
+
+  if (entries.length === 0){
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="8">No entries logged yet — add your first entry above.</td></tr>`;
     return;
   }
 
-  sortedWithIndex(expenses).forEach(({ row, index }) => {
-    const { qty, rate } = parseDescription(row.description);
-    const tr = document.createElement("tr");
-    tr.setAttribute("data-row-index", index);
-    tr.innerHTML = `
-      <td>${esc(row.date) || "-"}</td>
-      <td>${esc(row.category) || "-"}</td>
-      <td>${esc(row.subcategory) || "-"}</td>
-      <td class="num">${qty}</td>
-      <td class="num">${rate}</td>
-      <td class="num">${formatRs(row.amount)}</td>
-      <td><div class="action-cell">
-        <button type="button" class="edit-btn" data-index="${index}">Edit</button>
-        <button type="button" class="del-btn" data-index="${index}">Delete</button>
-      </div></td>
-    `;
-    tbody.appendChild(tr);
+  const time = e => e.dt ? e.dt.getTime() : Infinity;
+  entries.sort((a, b) =>
+    time(a) - time(b) ||
+    (a.kind === b.kind ? 0 : (a.kind === "credit" ? -1 : 1)) ||   // credits first on the same day
+    a.index - b.index
+  );
+
+  // group by date
+  const groups = [];
+  entries.forEach(e => {
+    const key = e.dt ? e.dt.getTime() : "unknown";
+    let g = groups[groups.length - 1];
+    if (!g || g.key !== key){
+      g = { key, label: e.dt ? e.row.date : "Unknown date", items: [] };
+      groups.push(g);
+    }
+    g.items.push(e);
+  });
+
+  // running balance follows the same rule as the summary card:
+  // it starts at the earliest credit; earlier expenses don't count against it
+  let earliestCredit = null;
+  credits.forEach(r => {
+    const d = parseDMY(r.date);
+    if (d && (!earliestCredit || d < earliestCredit)) earliestCredit = d;
+  });
+  let balance = 0;
+
+  groups.forEach(g => {
+    let dayIn = 0, dayOut = 0;
+    g.items.forEach(e => {
+      const amt = parseFloat(e.row.amount) || 0;
+      if (e.kind === "credit") dayIn += amt; else dayOut += amt;
+    });
+
+    const head = document.createElement("tr");
+    head.className = "date-group-row";
+    head.innerHTML = `<td colspan="8">
+      <strong>${esc(g.label)}</strong>
+      <span class="group-meta">${g.items.length} entr${g.items.length === 1 ? "y" : "ies"}
+        · In ${formatRs(dayIn)} · Out ${formatRs(dayOut)}</span>
+    </td>`;
+    tbody.appendChild(head);
+
+    g.items.forEach(e => {
+      const amt = parseFloat(e.row.amount) || 0;
+      const tr = document.createElement("tr");
+      let balCell = "—";
+
+      if (e.kind === "credit"){
+        balance += amt;
+        balCell = formatRs(balance);
+        tr.className = "ledger-credit";
+        tr.innerHTML = `
+          <td><span class="type-tag credit">Credit</span></td>
+          <td>${esc(e.row.source) || "-"}</td>
+          <td class="num">-</td>
+          <td class="num">-</td>
+          <td class="num">${formatRs(amt)}</td>
+          <td class="num">-</td>
+          <td class="num bal">${balCell}</td>
+          <td><span class="muted-note">Edit in Credit Log</span></td>`;
+      } else {
+        if (earliestCredit && e.dt && e.dt >= earliestCredit){
+          balance -= amt;
+          balCell = formatRs(balance);
+        }
+        const { qty, rate } = parseDescription(e.row.description);
+        const purpose = [e.row.category, e.row.subcategory].filter(Boolean).map(esc).join(" — ") || "-";
+        tr.setAttribute("data-row-index", e.index);
+        tr.innerHTML = `
+          <td><span class="type-tag expense">Expense</span></td>
+          <td>${purpose}</td>
+          <td class="num">${qty}</td>
+          <td class="num">${rate}</td>
+          <td class="num">-</td>
+          <td class="num">${formatRs(amt)}</td>
+          <td class="num bal">${balCell}</td>
+          <td><div class="action-cell">
+            <button type="button" class="edit-btn" data-index="${e.index}">Edit</button>
+            <button type="button" class="del-btn" data-index="${e.index}">Delete</button>
+          </div></td>`;
+      }
+      tbody.appendChild(tr);
+    });
   });
 
   tbody.querySelectorAll(".del-btn").forEach(btn => {
@@ -1128,7 +1220,7 @@ function toggleExpenseInlineEdit(index){
   editTr.id = "expense-edit-row";
   editTr.className = "inline-edit-row";
   editTr.innerHTML = `
-    <td colspan="7">
+    <td colspan="8">
       <div class="inline-edit-panel">
         <p class="inline-edit-title">Edit this expense</p>
         <div class="field-grid">
